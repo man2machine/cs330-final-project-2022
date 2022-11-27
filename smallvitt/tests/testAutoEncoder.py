@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from  models.vitAutoEncoder import  ViTAutoEncoder
+from  smallvitt.models.vitAutoEncoder import  ViTAutoEncoder
 def test_AutoEncoder():
     img_size=32
     patch_size=4
@@ -20,6 +20,6 @@ def test_AutoEncoder():
                 stochastic_depth=sd, decoder_dim=96, decoder_depth=3, decoder_heads=16, is_SPT=is_SPT, is_LSA=is_LSA)
 
     out = encoder.forward(test_tensor)
-    images = encoder.unpatchify(out)
+    images = encoder.unpatchify(out[1])
 
     assert images.shape == test_tensor.shape# shape remains same

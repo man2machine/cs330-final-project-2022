@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from  models.vitEncoder import ViTEncoder
+from smallvitt.models.vitEncoder import ViTEncoder
 def test_VanillaEncoder():
     img_size=32
     patch_size=4
