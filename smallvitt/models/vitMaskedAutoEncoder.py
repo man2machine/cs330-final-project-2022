@@ -1,6 +1,6 @@
 import torch
 from torch import nn, einsum
-from smallvitt.utils.drop_path import DropPath
+from utils.drop_path import DropPath
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from .SPT import ShiftedPatchTokenization
