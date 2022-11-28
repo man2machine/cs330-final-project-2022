@@ -114,7 +114,7 @@ def init_parser():
     return parser
 
 
-DEVICE = torch.device("cuda")
+DEVICE = torch.device("cpu")
 print(DEVICE)
 
 

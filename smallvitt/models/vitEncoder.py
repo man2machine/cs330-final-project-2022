@@ -1,6 +1,6 @@
 import torch
 from torch import nn, einsum
-from utils.drop_path import DropPath
+from smallvitt.utils.drop_path import DropPath
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from .SPT import ShiftedPatchTokenization
@@ -158,6 +158,10 @@ class ViTEncoder(nn.Module):
         self.dropout = nn.Dropout(emb_dropout)
         self.transformer = Transformer(self.dim, self.num_patches, depth, heads, dim_head, mlp_dim_ratio, dropout,
                                        stochastic_depth, is_LSA=is_LSA)
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(self.dim),
+            nn.Linear(self.dim, self.num_classes)
+        )
 
         self.apply(init_weights)
 
@@ -176,6 +180,8 @@ class ViTEncoder(nn.Module):
 
         x = self.transformer(x)
 
-        return x
+        return self.mlp_head(x[:, 0])
+
+
 
 

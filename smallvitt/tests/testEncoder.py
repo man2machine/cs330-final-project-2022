@@ -10,10 +10,7 @@ def test_VanillaEncoder():
     is_SPT=False
     is_LSA=False
 
-    #def __init__(self, *, img_size, patch_size, num_classes, dim, depth, heads, mlp_dim_ratio,
-    #             decoder_depth, decoder_heads,
-    #             dim_head=16, dropout=0., emb_dropout=0., stochastic_depth=0., is_LSA=False, is_SPT=False,
-    #             norm_pix_loss=False, in_chans):
+
 
     encoder = ViTEncoder(img_size=img_size, patch_size=patch_size, num_classes=n_classes, dim=192,
                 mlp_dim_ratio=2, depth=9, heads=12, dim_head=192 // 12,
