@@ -1,4 +1,5 @@
-torch
+#pip3 install torch+cu111 torchvision torchaudio -f https://download.pytorch.org/whl/torch_stable.html
+#python3 -m venv venv
 pillow==8.4.0
 numpy==1.19.5
 einops==0.3.2
@@ -6,5 +7,4 @@ colorama
 torchsummary
 tqdm
 tensorboard
-torchvision
 pytest
