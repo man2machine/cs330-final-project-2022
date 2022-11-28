@@ -1,4 +1,4 @@
-from utils.mix import cutmix_data, mixup_data, mixup_criterion
+#from utils.mix import cutmix_data, mixup_data, mixup_criterion
 import numpy as np
 import random
 import logging as log
