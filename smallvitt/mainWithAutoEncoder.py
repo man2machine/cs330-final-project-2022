@@ -113,7 +113,7 @@ def init_parser():
 
     return parser
 
-
+#change this to cuda on azure
 DEVICE = torch.device("cpu")
 print(DEVICE)
 
