@@ -114,7 +114,7 @@ def init_parser():
     return parser
 
 
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda")
 print(DEVICE)
 
 
@@ -242,7 +242,7 @@ def main(args):
     print()
 
     lr = optimizer.param_groups[0]["lr"]
-
+    best_loss = -float('inf')
     if args.resume:
         checkpoint = torch.load(args.resume)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -253,7 +253,7 @@ def main(args):
 
     for epoch in tqdm(range(args.epochs)):
         lr = train(train_loader, model, criterion, optimizer, epoch, scheduler, args)
-        acc1 = validate(val_loader, model, criterion, lr, args, epoch=epoch)
+        avgloss = validate(val_loader, model, criterion, lr, args, epoch=epoch)
         torch.save({
             'model_state_dict': model.state_dict(),
             'epoch': epoch,
@@ -264,9 +264,9 @@ def main(args):
 
         logger_dict.print()
 
-        if acc1 > best_acc1:
+        if avgloss <  best_loss:
             print('* Best model upate *')
-            best_acc1 = acc1
+            best_loss = avgloss
 
             torch.save({
                 'model_state_dict': model.state_dict(),
@@ -275,14 +275,13 @@ def main(args):
                 'scheduler': scheduler.state_dict(),
             }, os.path.join(save_path, 'best.pth'))
 
-        print(f'Best acc1 {best_acc1:.2f}')
+
         print('*' * 80)
         print(Style.RESET_ALL)
 
         writer.add_scalar("Learning Rate", lr, epoch)
 
     print(Fore.RED + '*' * 80)
-    logger.debug(f'best top-1: {best_acc1:.2f}, final top-1: {acc1:.2f}')
     print('*' * 80 + Style.RESET_ALL)
     torch.save(model.state_dict(), os.path.join(save_path, 'checkpoint.pth'))
 
@@ -333,31 +332,34 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
                 images = images.cuda(args.gpu, non_blocking=True)
                 target = target.cuda(args.gpu, non_blocking=True)
 
-            output = model(images)
-            loss = criterion(output, target)
+            if args.model == 'vitautoencoder':
+                loss, output = model(images)
+            elif args.model == 'vitmaskedautoencoder':
+                loss, output, mask = model(images)
+            #loss = criterion(output, target)
 
-            acc = accuracy(output, target, (1, 5))
-            acc1 = acc[0]
+            #acc = accuracy(output, target, (1, 5))
+            #acc1 = acc[0]
             n += images.size(0)
             loss_val += float(loss.item() * images.size(0))
-            acc1_val += float(acc1[0] * images.size(0))
+            #acc1_val += float(acc1[0] * images.size(0))
 
             if args.print_freq >= 0 and i % args.print_freq == 0:
-                avg_loss, avg_acc1 = (loss_val / n), (acc1_val / n)
+                avg_loss = (loss_val / n)
                 progress_bar(i, len(val_loader),
-                             f'[Epoch {epoch + 1}][V][{i}]   Loss: {avg_loss:.4e}   Top-1: {avg_acc1:6.2f}   LR: {lr:.6f}')
+                             f'[Epoch {epoch + 1}][V][{i}]   Loss: {avg_loss:.4e}    LR: {lr:.6f}')
     print()
 
     print(Fore.BLUE)
     print('*' * 80)
 
     logger_dict.update(keys[2], avg_loss)
-    logger_dict.update(keys[3], avg_acc1)
+
 
     writer.add_scalar("Loss/val", avg_loss, epoch)
-    writer.add_scalar("Acc/val", avg_acc1, epoch)
 
-    return avg_acc1
+
+    return avg_loss
 
 
 if __name__ == '__main__':
