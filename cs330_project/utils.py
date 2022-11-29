@@ -27,17 +27,17 @@ class JSONDictSerializable(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def from_dict(cls, dct):
         pass
-
+    
     def to_json(self):
         return json.dumps(self.to_dict())
-
+    
     @classmethod
     def from_json(cls, data):
         return cls.from_dict(json.loads(data))
-
+    
     def to_bytes(self):
         return self.to_json().encode()
-
+    
     @classmethod
     def from_bytes(cls, data):
         return cls.from_json(data.decode())
@@ -49,20 +49,20 @@ def number_menu(option_list):
         print(n, ": " , option_list[n])
     
     choice = input("Choose the number corresponding to your choice: ")
-    for n in range(5):        
-        try: 
+    for n in range(5):
+        try:
             choice = int(choice)
             if choice < 0 or choice > len(option_list)-1:
                 raise ValueError    
             print("-"*60 + "\n")
             return choice, option_list[choice]
-        except ValueError: 
+        except ValueError:
             choice = input("Invalid input, choose again: ")
     
     raise ValueError("Not recieving a valid input")
 
 def get_rel_pkg_path(path):
-    return os.path.abspath(os.path.join(os.path.dirname(project_6857.__file__), "..", path))
+    return os.path.abspath(os.path.join(os.path.dirname(cs330_project.__file__), "..", path))
 
 def load_rel_config_json(fname):
     fname = get_rel_pkg_path(fname)

@@ -1,4 +1,8 @@
+.idea
 logs/
+smallvitt/dataset
+smallvitt/save
+smallvitt/tensorboard
 
 ########################################
 # From github .gitignore from Python
