@@ -1,8 +1,4 @@
 from .vit import ViT
-from .cait import CaiT
-from .pit import PiT
-from .swin import SwinTransformer
-from .t2t import T2T_ViT
 from  models.vitAutoEncoder import  ViTAutoEncoder
 from  models.vitMaskedAutoEncoder import  ViTMaskedAutoEncoder
 
