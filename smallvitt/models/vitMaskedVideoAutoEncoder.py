@@ -143,13 +143,16 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         super().__init__()
         image_height, image_width = pair(img_size)
         patch_height, patch_width = pair(patch_size)
-        self.num_patches = (image_height // patch_height) * (image_width // patch_width)
+        self.image_height,  self.image_width= pair(img_size)
+        self.num_patches = int( (image_height // patch_height) * (image_width // patch_width) * (frames_depth/tubelet_size))
         self.patch_dim = channels * patch_height * patch_width
         self.dim = dim
         self.num_classes = num_classes
         self.decoder_dim=decoder_dim
         self.patch_size = patch_size
         self.frames_depth = frames_depth
+        self.tubelet_size= tubelet_size
+        self.numChannels = in_chans
 
         self.to_patch_embedding = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=dim, tubelet_size=tubelet_size)
@@ -175,7 +178,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
                                        stochastic_depth, is_LSA=is_LSA)
 
         self.decoder_norm = nn.LayerNorm(self.decoder_dim)
-        self.decoder_pred = nn.Linear(self.decoder_dim, patch_size ** 2 * in_chans* self.frames_depth, bias=True)  # decoder to patch
+        self.decoder_pred = nn.Linear(self.decoder_dim, patch_size ** 2 * in_chans* self.tubelet_size, bias=True)  # decoder to patch
         # --------------------------------------------------------------------------
 
         self.norm_pix_loss = norm_pix_loss
@@ -287,13 +290,14 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         x: (N, L, patch_size**2 *3)
         imgs: (N, 3, H, W)
         """
+        #(1, 3, 10, 32, 32)
         p = self.patch_size
-        h = w = int(x.shape[1] ** .5)
-        assert h * w == x.shape[1]
+        #h = w = int(x.shape[1] ** .5)
+        #assert h * w == x.shape[1]
         d = self.frames_depth
-        x = x.reshape(shape=(x.shape[0], h, w, p, p, 3, d))
-        x = torch.einsum('nhwpdqc->nchpdwq', x)
-        imgs = x.reshape(shape=(x.shape[0], d, 3, h * p, h * p))
+        #x = x.reshape(shape=(x.shape[0], h, w, p, p, 3, d))
+        #x = torch.einsum('nhwpdqc->nchpdwq', x)
+        imgs = x.reshape(shape=(x.shape[0], self.numChannels, self.frames_depth, self.image_height, self.image_width))
         return imgs
 
     def random_masking(self, x, mask_ratio):
@@ -324,6 +328,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         return x_masked, mask, ids_restore
     def patchify(self, imgs):
         """
+        1 320 96
         imgs: (N, 3, H, W)
         x: (N, L, patch_size**2 *3)
         """
@@ -332,9 +337,11 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         d=imgs.shape[2] # frames depth we are conisdering tube as one unit from where we want to extract tokens.
 
         h = w = imgs.shape[3] // p
+        frames = int  (self.frames_depth /self.tubelet_size )
         x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p, d))
         x = torch.einsum('nchpdwq->nhwpdqc', x)
-        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3*d))
+
+        x = x.reshape(shape=(imgs.shape[0], h * w * frames, p**2 * 3 * self.tubelet_size ))
         return x
 
 class PatchEmbed(nn.Module):
