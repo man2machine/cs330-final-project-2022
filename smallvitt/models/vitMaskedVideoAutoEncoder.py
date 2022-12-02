@@ -55,6 +55,52 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+#Attenstion Space Time  (dim, num_patches, heads=heads, dim_head=dim_head, dropout=dropout, is_LSA=is_LSA)
+class AttentionST(nn.Module):
+    def __init__(
+            self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.,
+            proj_drop=0., num_patches=320, dropout= 0.5, dim_head=None):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        if dim_head is not None:
+            head_dim = dim_head
+        all_head_dim = head_dim * self.num_heads
+        self.scale = qk_scale or head_dim ** -0.5
+
+        self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
+        if qkv_bias:
+            self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
+            self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
+        else:
+            self.q_bias = None
+            self.v_bias = None
+
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(all_head_dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        qkv_bias = None
+        if self.q_bias is not None:
+            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
+        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+        qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+
+        q = q * self.scale
+        attn = (q @ k.transpose(-2, -1))
+
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
 
 class Attention(nn.Module):
     def __init__(self, dim, num_patches, heads=8, dim_head=64, dropout=0., is_LSA=False):
@@ -109,7 +155,9 @@ class Attention(nn.Module):
             flops += (self.dim + 2) * self.inner_dim * 3 * self.num_patches
             flops += self.dim * self.inner_dim * 3
 
-
+#  def __init__(
+#             self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.,
+#             proj_drop=0., attn_head_dim=None):
 class Transformer(nn.Module):
     def __init__(self, dim, num_patches, depth, heads, dim_head, mlp_dim_ratio, dropout=0., stochastic_depth=0.,
                  is_LSA=False):
@@ -118,6 +166,8 @@ class Transformer(nn.Module):
         self.scale = {}
 
 
+        #AttentionST from VideoMAE code based can be plugged-in by replacing Attention by AttentionST
+        #num_heads
         for i in range(depth):
             self.layers.append(nn.ModuleList([
                 PreNorm(num_patches, dim,
@@ -178,6 +228,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
                                        stochastic_depth, is_LSA=is_LSA)
 
         self.decoder_norm = nn.LayerNorm(self.decoder_dim)
+        #we have tublelet factor as well so we need to consider that
         self.decoder_pred = nn.Linear(self.decoder_dim, patch_size ** 2 * in_chans* self.tubelet_size, bias=True)  # decoder to patch
         # --------------------------------------------------------------------------
 
@@ -218,6 +269,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         #_, _, T, _, _ = x.shape
         #x = self.patch_embed(x)
         x = self.to_patch_embedding(img)
+        # B, number of tokens, latent dim (shape)
         #B, _, C = x.shape
         b, n, _ = x.shape
 
@@ -294,6 +346,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         p = self.patch_size
         #h = w = int(x.shape[1] ** .5)
         #assert h * w == x.shape[1]
+
         d = self.frames_depth
         #x = x.reshape(shape=(x.shape[0], h, w, p, p, 3, d))
         #x = torch.einsum('nhwpdqc->nchpdwq', x)
@@ -329,8 +382,8 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
     def patchify(self, imgs):
         """
         1 320 96
-        imgs: (N, 3, H, W)
-        x: (N, L, patch_size**2 *3)
+        imgs: (B, C, T, H, W)
+        x: (B, L, patch_size**2 *3)
         """
         p = self.patch_size
         assert imgs.shape[3] == imgs.shape[4] and imgs.shape[3] % p == 0
