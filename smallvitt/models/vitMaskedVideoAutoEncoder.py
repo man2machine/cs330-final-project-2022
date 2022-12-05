@@ -219,7 +219,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         self.decoder_embed = nn.Linear(self.dim, self.decoder_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, self.decoder_dim))
 
-        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, decoder_dim), requires_grad=False)
+        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, self.num_patches , decoder_dim), requires_grad=False)
 
 
         self.decoder_dropout = nn.Dropout(emb_dropout)
@@ -279,9 +279,9 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
 
         # append cls token
 
-        cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)
+        #cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)
 
-        x = torch.cat((cls_tokens, x), dim=1)
+        #x = torch.cat((cls_tokens, x), dim=1)
 
 
         x = self.dropout(x)
@@ -314,7 +314,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         x= self.decoder_pred(x)
 
         # remove cls token
-        x = x[:, 1:, :]
+        #x = x[:, 1:, :]
 
         return x
 
