@@ -32,7 +32,8 @@ def create_model(img_size, n_classes, args):
         sd = 0.1  # stochastic depth
         is_SPT = False
         is_LSA = False
-        model = ViTMaskedVideoAutoEncoder(img_size=32, frames_depth=10, patch_size=patch_size, num_classes=n_classes, dim=192,
+
+        model = ViTMaskedVideoAutoEncoder(img_size=args.input_size, frames_depth=args.num_frames, patch_size=patch_size, num_classes=n_classes, dim=192,
                 mlp_dim_ratio=2, depth=9, heads=12, dim_head=192 // 12,
                 stochastic_depth=sd, decoder_dim=96, decoder_depth=3, decoder_heads=16, tubelet_size=2, is_SPT=is_SPT, is_LSA=is_LSA)
 
