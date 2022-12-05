@@ -4,7 +4,16 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 def datainfo(logger, args):
-    if args.dataset == 'CIFAR10':
+
+    if args.dataset == 'TinyVIRAT':
+        print(Fore.YELLOW+'*'*80)
+        logger.debug('TinyVIRAT')
+        print('*'*80 + Style.RESET_ALL)
+        n_classes = 10
+        img_mean, img_std = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
+        img_size = 32
+
+    elif args.dataset == 'CIFAR10':
         print(Fore.YELLOW+'*'*80)
         logger.debug('CIFAR10')
         print('*'*80 + Style.RESET_ALL)

@@ -17,4 +17,4 @@ def test_VanillaEncoder():
                 stochastic_depth=0.0, is_SPT=is_SPT, is_LSA=is_LSA, channels=3)
 
     out = encoder(test_tensor)
-    print (out.shape)# shape remains same
+    print (out.shape)

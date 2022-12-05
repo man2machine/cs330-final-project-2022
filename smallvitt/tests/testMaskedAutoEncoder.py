@@ -5,7 +5,7 @@ def test_AutoEncoder():
     img_size=32
     patch_size=4
     n_classes=10
-    test_tensor = torch.randn(1, 3,32,32)
+    test_tensor = torch.randn(1, 3,32,32) # B Channel, Width, Height
     sd=0.1 #stochastic depth
     is_SPT=False
     is_LSA=False
