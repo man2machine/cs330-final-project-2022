@@ -237,9 +237,9 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         self.apply(init_weights)
 
 
-    def forward(self, imgs, mask_ratio=0.75):
+    def forward(self, imgs):
 
-        latent = self.forwardEncoder(imgs, mask_ratio)
+        latent = self.forwardEncoder(imgs)
         pred = self.forwardDecoder(latent)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred)
         return loss, pred
@@ -261,7 +261,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
 
 
 
-    def forwardEncoder(self, img,  mask_ratio):
+    def forwardEncoder(self, img):
         # patch embedding
 
         #encoder
@@ -325,6 +325,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         mask: [N, L], 0 is keep, 1 is remove,
         """
         target = self.patchify(imgs)
+        N = imgs[0]
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
@@ -334,7 +335,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         loss = loss.mean(dim=-1)
         # [N, L], mean loss per patch
         #loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-        loss = loss.sum()
+        loss = (loss.sum()/N)
         return loss
 
     def unpatchify(self, x):
