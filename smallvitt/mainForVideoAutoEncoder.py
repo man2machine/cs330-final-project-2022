@@ -52,7 +52,7 @@ def init_parser():
 
     parser.add_argument('--warmup', default=10, type=int, metavar='N', help='number of warmup epochs')
 
-    parser.add_argument('-b', '--batch_size', default=128, type=int, metavar='N', help='mini-batch size (default: 128)',
+    parser.add_argument('-b', '--batch_size', default=4, type=int, metavar='N', help='mini-batch size (default: 128)',
                         dest='batch_size')
 
     parser.add_argument('--lr', default=0.001, type=float, help='initial learning rate')
@@ -79,7 +79,7 @@ def init_parser():
 
     parser.add_argument('--tag', type=str, help='tag', default='')
 
-    parser.add_argument('--input_size', default=224, type=int,
+    parser.add_argument('--input_size', default=32, type=int,
                         help='videos input size for backbone')
 
 
