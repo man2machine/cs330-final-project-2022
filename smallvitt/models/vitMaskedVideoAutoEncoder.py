@@ -331,8 +331,10 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
             target = (target - mean) / (var + 1.e-6) ** .5
 
         loss = (pred - target) ** 2
-        loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+        loss = loss.mean(dim=-1)
+        # [N, L], mean loss per patch
         #loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+        loss = loss.sum()
         return loss
 
     def unpatchify(self, x):
