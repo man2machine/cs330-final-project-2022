@@ -239,10 +239,10 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
 
     def forward(self, imgs, mask_ratio=0.75):
 
-        latent, mask, ids_restore = self.forwardEncoder(imgs, mask_ratio)
-        pred = self.forwardDecoder(latent, ids_restore)  # [N, L, p*p*3]
-        loss = self.forward_loss(imgs, pred, mask)
-        return loss, pred,mask
+        latent = self.forwardEncoder(imgs, mask_ratio)
+        pred = self.forwardDecoder(latent)  # [N, L, p*p*3]
+        loss = self.forward_loss(imgs, pred)
+        return loss, pred
 
    # def forward(self, x, mask):
    #     _, _, T, _, _ = x.shape
@@ -275,12 +275,10 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
 
         x = x + self.pos_embedding[:, 1:, :]
         # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        #x, mask, ids_restore = self.random_masking(x, mask_ratio)
 
         # append cls token
-        #cls_token = self.cls_token + self.pos_embedding[:, :1, :]
-        #cls_tokens = cls_token.expand(x.shape[0], -1, -1)
-        #x = torch.cat((cls_tokens, x), dim=1)
+
         cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)
 
         x = torch.cat((cls_tokens, x), dim=1)
@@ -291,18 +289,18 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         x = self.transformer(x)
 
         x = self.norm(x)
-        return x, mask, ids_restore
+        return x
     #CR
-    def forwardDecoder(self, x, ids_restore):
+    def forwardDecoder(self, x):
         #now do forward on decoder part. first get decoder embeddings from tranformer output
         #decoder
         x = self.decoder_embed(x)
 
         # append mask tokens to sequence
-        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
-        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
-        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
-        x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
+        #mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
+        #x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
+        #x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        #x = torch.cat([x[:, :1, :], x], dim=1)  # append cls token
 
         # add pos embed
         x = x + self.decoder_pos_embed
@@ -320,7 +318,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
 
         return x
 
-    def forward_loss(self, imgs, pred, mask):
+    def forward_loss(self, imgs, pred):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
@@ -334,7 +332,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
 
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
-        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+        #loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
     def unpatchify(self, x):
