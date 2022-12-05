@@ -59,7 +59,7 @@ def init_parser():
 
     parser.add_argument('--weight-decay', default=5e-2, type=float, help='weight decay (default: 1e-4)')
 
-    parser.add_argument('--model', type=str, default='vitMaskedVideoAutoEncoder', choices=MODELS)
+    parser.add_argument('--model', type=str, default='vitmaskedvideoautoencoder', choices=MODELS)
 
     parser.add_argument('--disable-cos', action='store_true', help='disable cosine lr schedule')
 
