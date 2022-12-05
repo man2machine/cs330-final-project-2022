@@ -1,8 +1,8 @@
 
-from cs330_project.models.small_vit.models.vit import ViT
-from cs330_project.models.small_vit.models.vitAutoEncoder import  ViTAutoEncoder
-from cs330_project.models.small_vit.models.vitMaskedAutoEncoder import  ViTMaskedAutoEncoder
-from cs330_project.models.small_vit.models.vitMaskedVideoAutoEncoder import ViTMaskedVideoAutoEncoder
+from models.vit import ViT
+from models.vitAutoEncoder import  ViTAutoEncoder
+from models.vitMaskedAutoEncoder import  ViTMaskedAutoEncoder
+from models.vitMaskedVideoAutoEncoder import ViTMaskedVideoAutoEncoder
 
 def create_model(img_size, n_classes, args):
     if args.model == 'vit':
@@ -27,7 +27,7 @@ def create_model(img_size, n_classes, args):
         model = ViTMaskedAutoEncoder(img_size=32, patch_size=patch_size, num_classes=n_classes, dim=192,
                 mlp_dim_ratio=2, depth=9, heads=12, dim_head=192 // 12,
                 stochastic_depth=sd, decoder_dim=96, decoder_depth=3, decoder_heads=16, is_SPT=is_SPT, is_LSA=is_LSA)
-    elif args.model == 'vitMaskedVideoAutoEncoder':
+    elif args.model == 'vitmaskedvideoautoencoder':
         patch_size = 4 if img_size == 32 else 8
         sd = 0.1  # stochastic depth
         is_SPT = False
