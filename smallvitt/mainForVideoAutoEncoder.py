@@ -166,7 +166,7 @@ import sys
 def build_pretraining_dataset(args):
     transform = DataAugmentationForVideoMAE(args)
     dataset = VideoMAE(
-        root="TinyVIRAT/train/",
+        root="compositeDataset/train/",
         setting=args.data_path,
         video_ext='mp4',
         is_color=True,
@@ -356,6 +356,8 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
             loss, output  = model(images)
         elif args.model == 'vitmaskedautoencoder':
             loss, output, mask = model(images)
+        elif args.model == 'vitmaskedvideoautoencoder':
+            loss, output  = model(images)
 
         n += images.size(0)
         loss_val += float(loss.item() * images.size(0))

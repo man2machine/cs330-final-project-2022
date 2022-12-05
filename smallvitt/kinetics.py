@@ -487,7 +487,8 @@ class VideoMAE(torch.utils.data.Dataset):
         segment_indices, skip_offsets = self._sample_train_indices(duration)
 
         images = self._video_TSN_decord_batch_loader(directory, decord_vr, duration, segment_indices, skip_offsets)
-
+        from PIL import Image
+        images[0].show()
         process_data, mask = self.transform((images, None))  # T*C,H,W
         process_data = process_data.view((self.new_length, 3) + process_data.size()[-2:]).transpose(0,
                                                                                                     1)  # T*C,H,W -> T,C,H,W -> C,T,H,W
