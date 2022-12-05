@@ -1,7 +1,9 @@
-from .vit import ViT
-from  models.vitAutoEncoder import  ViTAutoEncoder
-from  models.vitMaskedAutoEncoder import  ViTMaskedAutoEncoder
-from  models.vitMaskedVideoAutoEncoder import ViTMaskedVideoAutoEncoder
+
+from cs330_project.models.small_vit.models.vit import ViT
+from cs330_project.models.small_vit.models.vitAutoEncoder import  ViTAutoEncoder
+from cs330_project.models.small_vit.models.vitMaskedAutoEncoder import  ViTMaskedAutoEncoder
+from cs330_project.models.small_vit.models.vitMaskedVideoAutoEncoder import ViTMaskedVideoAutoEncoder
+
 def create_model(img_size, n_classes, args):
     if args.model == 'vit':
         patch_size = 4 if img_size == 32 else 8

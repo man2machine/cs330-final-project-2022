@@ -23,3 +23,5 @@ def test_AutoEncoder():
     images = encoder.unpatchify(out[1])
 
     assert images.shape == test_tensor.shape# shape remains same
+
+test_AutoEncoder()

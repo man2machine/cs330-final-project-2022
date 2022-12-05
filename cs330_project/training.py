@@ -159,15 +159,17 @@ def train_one_epoch(
 
         with torch.set_grad_enabled(True):
             outputs = model(samples)
-            loss = criterion(outputs, targets)
+            loss, _, _ = outputs
+            # loss = criterion(outputs, targets)
             loss /= grad_accum_steps
         loss.backward()
 
         if (data_iter_step + 1) % grad_accum_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
-
-        torch.cuda.synchronize()
+        
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
 
 
 def train_model(
@@ -202,6 +204,7 @@ def train_model(
             model,
             criterion,
             dataloaders['train'],
+            optimizer,
             device)
 
         print("Training Loss: {:.4f}".format(training_loss))
