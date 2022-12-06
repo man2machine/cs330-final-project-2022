@@ -4,7 +4,7 @@ from smallvitt.utils.drop_path import DropPath
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from .SPT import ShiftedPatchTokenization
-
+import torch.nn.functional as F
 
 
 # helpers
@@ -86,6 +86,7 @@ class AttentionST(nn.Module):
         if self.q_bias is not None:
             qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
         # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+
         qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
         qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
@@ -224,8 +225,7 @@ class ViTMaskedVideoEncoderWithHead(nn.Module):
         self.apply(init_weights)
 
 
-
-    def forwardEncoder(self, img):
+    def forward(self, img):
         # patch embedding
 
         #encoder
@@ -253,44 +253,11 @@ class ViTMaskedVideoEncoderWithHead(nn.Module):
         x = self.transformer(x)
 
         x = self.norm(x)
-        return x
+        return self.mlp_head(x[:, 0])
 
 
-    def forward_loss(self, imgs, pred):
-        """
-        imgs: [N, 3, H, W]
-        pred: [N, L, p*p*3]
-        mask: [N, L], 0 is keep, 1 is remove,
-        """
-        target = self.patchify(imgs)
-        N = imgs[0]
-        if self.norm_pix_loss:
-            mean = target.mean(dim=-1, keepdim=True)
-            var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.e-6) ** .5
 
-        loss = (pred - target) ** 2
-        loss = loss.mean(dim=-1)
-        # [N, L], mean loss per patch
-        #loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-        loss = (loss.sum()/N)
-        return loss
 
-    def unpatchify(self, x):
-        """
-        x: (N, L, patch_size**2 *3)
-        imgs: (N, 3, H, W)
-        """
-        #(1, 3, 10, 32, 32)
-        p = self.patch_size
-        #h = w = int(x.shape[1] ** .5)
-        #assert h * w == x.shape[1]
-
-        d = self.frames_depth
-        #x = x.reshape(shape=(x.shape[0], h, w, p, p, 3, d))
-        #x = torch.einsum('nhwpdqc->nchpdwq', x)
-        imgs = x.reshape(shape=(x.shape[0], self.numChannels, self.frames_depth, self.image_height, self.image_width))
-        return imgs
 
     def patchify(self, imgs):
         """
