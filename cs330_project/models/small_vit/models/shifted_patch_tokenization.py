@@ -67,7 +67,7 @@ class PatchShifting(nn.Module):
         return out
 
 
-class ShiftedPatchTokenization(nn.Module):
+class ShiftedPatchEmbed2d(nn.Module):
     def __init__(
             self,
             in_dim,

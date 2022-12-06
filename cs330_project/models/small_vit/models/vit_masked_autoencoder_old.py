@@ -14,7 +14,7 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
 from cs330_project.models.small_vit.utils.drop_path import DropPath
-from cs330_project.models.small_vit.models.shifted_patch_tokenization import ShiftedPatchTokenization
+from cs330_project.models.small_vit.models.shifted_patch_tokenization import ShiftedPatchEmbed2d
 from cs330_project.models.small_vit.models.utils import make_pair_shape
 
 
@@ -229,7 +229,7 @@ class ViTMaskedAutoEncoder(nn.Module):
             )
 
         else:
-            self.to_patch_embedding = ShiftedPatchTokenization(
+            self.to_patch_embedding = ShiftedPatchEmbed2d(
                 in_dim=3,
                 out_dim=self.dim,
                 patch_size=patch_size,

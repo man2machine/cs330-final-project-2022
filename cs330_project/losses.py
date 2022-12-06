@@ -10,27 +10,6 @@ import math
 
 import torch
 
-def autoencoder_loss(imgs, pred, mask=None, norm_pix_loss=False):
-    """
-    imgs: [N, 3, H, W]
-    pred: [N, L, p*p*3]
-    mask: [N, L], 0 is keep, 1 is remove,
-    """
-    
-    target = patchify(imgs)
-    if norm_pix_loss:
-        mean = target.mean(dim=-1, keepdim=True)
-        var = target.var(dim=-1, keepdim=True)
-        target = (target - mean) / math.sqrt(var + 1.e-6)
-
-    loss = (pred - target) ** 2
-    loss = loss.mean(dim=-1) # [N, L], mean loss per patch
-    if mask is not None:
-        loss = (loss * mask).sum() / mask.sum() # mean loss on removed patches
-    else:
-        loss = loss.sum()
-    return loss
-
 def unpatchify(x, patch_size):
     """
     x: (N, L, patch_size**2 *3)
@@ -89,3 +68,24 @@ def random_masking(x, mask_ratio):
     mask = torch.gather(mask, dim=1, index=ids_restore)
 
     return x_masked, mask, ids_restore
+
+def autoencoder_loss(imgs, pred, mask=None, norm_pix_loss=False):
+    """
+    imgs: [N, 3, H, W]
+    pred: [N, L, p*p*3]
+    mask: [N, L], 0 is keep, 1 is remove,
+    """
+    
+    target = patchify(imgs)
+    if norm_pix_loss:
+        mean = target.mean(dim=-1, keepdim=True)
+        var = target.var(dim=-1, keepdim=True)
+        target = (target - mean) / math.sqrt(var + 1.e-6)
+
+    loss = (pred - target) ** 2
+    loss = loss.mean(dim=-1) # [N, L], mean loss per patch
+    if mask is not None:
+        loss = (loss * mask).sum() / mask.sum() # mean loss on removed patches
+    else:
+        loss = loss.sum()
+    return loss

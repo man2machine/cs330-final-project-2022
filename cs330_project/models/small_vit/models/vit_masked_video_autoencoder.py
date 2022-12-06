@@ -3,7 +3,7 @@ from torch import nn, einsum
 from smallvitt.utils.drop_path import DropPath
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-from .shifted_patch_tokenization import ShiftedPatchTokenization
+from .shifted_patch_tokenization import ShiftedPatchEmbed2d
 
 
 # helpers
