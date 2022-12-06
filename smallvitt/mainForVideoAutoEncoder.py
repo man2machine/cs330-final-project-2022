@@ -163,7 +163,7 @@ print(DEVICE)
 
 import sys
 
-def build_pretraining_dataset(args):
+def build_pretraining_dataset(args, classToLabelMap=None):
     transform = DataAugmentationForVideoMAE(args)
     dataset = VideoMAE(
         root="compositeDataset/train/",
@@ -174,12 +174,15 @@ def build_pretraining_dataset(args):
         new_length=args.num_frames,
         new_step=args.sampling_rate,
         transform=transform,
+        labelMap=classToLabelMap,
         temporal_jitter=False,
         video_loader=True,
         use_decord=True,
-        lazy_init=False)
+        lazy_init=False
+
+    )
     print("Data Aug = %s" % str(transform))
-    return dataset
+    return dataset, dataset.codingToLabel
 
 
 
@@ -207,10 +210,17 @@ def main(args):
     args.patch_size = patch_size
 
     # get dataset
-    train_dataset = build_pretraining_dataset(args)
-    val_dataset = build_pretraining_dataset(args)
+    train_dataset,classToLabelTrain = build_pretraining_dataset(args)
+    val_dataset,classToLabelValid = build_pretraining_dataset(args, classToLabelTrain)
 
-
+    #test if we are getting same class to label set for both validation and training set
+    for classNum in classToLabelValid:
+        classLabelTrain = classToLabelTrain[classNum]
+        classLabelValid = classToLabelValid[classNum]
+        print(classLabelTrain)
+        print(classLabelValid)
+        if classLabelValid != classLabelTrain:
+            print("error in mapping")
 
     #    summary(model, input_size=(1, 1, 192))
     print(Fore.GREEN + '*' * 80)

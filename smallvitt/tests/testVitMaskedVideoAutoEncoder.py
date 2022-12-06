@@ -6,7 +6,7 @@ def test_AutoEncoder():
     patch_size=4
     n_classes=10
     # (B, C_{in}, T, H, W)  d=Depth means number of frames in video N is batch size C_{in} are channels in
-    test_tensor = torch.randn(1, 3, 10,32,32) # we have sampled 16 frames from video with batch size of 1
+    test_tensor = torch.randn(4, 3, 16,32,32) # we have sampled 16 frames from video with batch size of 1
     sd=0.1 #stochastic depth
     is_SPT=False
     is_LSA=False
@@ -15,7 +15,7 @@ def test_AutoEncoder():
     #              decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
     #             mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False):
     #frames depth should match dimension 1 of above tensor
-    encoder = ViTMaskedVideoAutoEncoder(img_size=32, frames_depth=10, patch_size=patch_size, num_classes=n_classes, dim=192,
+    encoder = ViTMaskedVideoAutoEncoder(img_size=32, frames_depth=16, patch_size=patch_size, num_classes=n_classes, dim=192,
                 mlp_dim_ratio=2, depth=9, heads=12, dim_head=192 // 12,
                 stochastic_depth=sd, decoder_dim=96, decoder_depth=3, decoder_heads=16, tubelet_size=2, is_SPT=is_SPT, is_LSA=is_LSA)
 

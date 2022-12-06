@@ -436,11 +436,13 @@ class VideoMAE(torch.utils.data.Dataset):
                  num_crop=1,
                  new_length=1,
                  new_step=1,
+                 labelMap=None,
                  transform=None,
                  temporal_jitter=False,
                  video_loader=False,
                  use_decord=False,
-                 lazy_init=False):
+                 lazy_init=False
+                 ):
 
         super(VideoMAE, self).__init__()
         self.root = root
@@ -461,9 +463,10 @@ class VideoMAE(torch.utils.data.Dataset):
         self.use_decord = use_decord
         self.transform = transform
         self.lazy_init = lazy_init
+        self.labelMap = labelMap
 
         if not self.lazy_init:
-            self.clips = self._make_dataset(root, setting)
+            self.clips, self.codingToLabel = self._make_dataset(root, setting,self.labelMap )
             if len(self.clips) == 0:
                 raise (RuntimeError("Found 0 video clips in subfolders of: " + root + "\n"
                                                                                       "Check your data directory (opt.data-dir)."))
@@ -498,7 +501,7 @@ class VideoMAE(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.clips)
 
-    def _make_dataset(self, directory, setting):
+    def _make_dataset(self, directory, setting, labelMap ):
 
         import json
 
@@ -514,17 +517,22 @@ class VideoMAE(torch.utils.data.Dataset):
         labelsToCoding = {}
         codingToLabels = {}
 
-        for tube in tubes:
-
-           label = tube["label"]
-           if label[0] not in labelsToCodingSet:
-               labelsToCodingSet.add(label[0])
-        counter = 0
-        for label in   labelsToCodingSet:
-            labelsToCoding[label] = counter
-            codingToLabels[counter]=label
-            counter = counter+1
-
+        #we need to reuse labelMap if already created in training setup
+        if labelMap == None:
+            for tube in tubes:
+                label = tube["label"]
+                if label[0] not in labelsToCodingSet:
+                    labelsToCodingSet.add(label[0])
+            counter = 0
+            for label in   labelsToCodingSet:
+                labelsToCoding[label] = counter
+                codingToLabels[counter]=label
+                counter = counter+1
+        else:
+            codingToLabels=labelMap
+            for code in codingToLabels:
+                label = codingToLabels[code]
+                labelsToCoding[label] = code
 
 
         if not os.path.exists(setting):
@@ -539,7 +547,7 @@ class VideoMAE(torch.utils.data.Dataset):
             target = labelsToCoding[label]
             item = (clip_path, target)
             clips.append(item)
-        return clips
+        return clips, codingToLabels
 
     def _sample_train_indices(self, num_frames):
         average_duration = (num_frames - self.skip_length + 1) // self.num_segments
