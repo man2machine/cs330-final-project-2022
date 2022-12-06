@@ -284,7 +284,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         #x = torch.cat((cls_tokens, x), dim=1)
 
 
-        x = self.dropout(x)
+        #x = self.dropout(x)
 
         x = self.transformer(x)
 
