@@ -30,7 +30,7 @@ from utils.scheduler import build_scheduler
 warnings.filterwarnings("ignore", category=Warning)
 
 best_acc1 = 0
-MODELS = ['vitMaskedVideoAutoEncoder']
+MODELS = ['vitMaskedVideoAutoEncoder', 'vitMaskedVideoEncoderWithHead', 'vitMaskedVideoEncoderWithMetaHead' ]
 
 
 def init_parser():
@@ -59,7 +59,7 @@ def init_parser():
 
     parser.add_argument('--weight-decay', default=5e-2, type=float, help='weight decay (default: 1e-4)')
 
-    parser.add_argument('--model', type=str, default='vitmaskedvideoautoencoder', choices=MODELS)
+    parser.add_argument('--model', type=str, default='vitmaskedvideoencoderwithhead', choices=MODELS)
 
     parser.add_argument('--disable-cos', action='store_true', help='disable cosine lr schedule')
 
@@ -198,11 +198,8 @@ def main(args):
 
     data_info = datainfo(logger, args)
 
-    model = create_model(data_info['img_size'], data_info['n_classes'], args)
 
-    model.to(DEVICE)
 
-    patch_size = model.patch_dim
     patch_size=4
 
     print("Patch size = %s" % str(patch_size))
@@ -213,6 +210,8 @@ def main(args):
     train_dataset,classToLabelTrain = build_pretraining_dataset(args)
     val_dataset,classToLabelValid = build_pretraining_dataset(args, classToLabelTrain)
 
+
+
     #test if we are getting same class to label set for both validation and training set
     for classNum in classToLabelValid:
         classLabelTrain = classToLabelTrain[classNum]
@@ -221,6 +220,12 @@ def main(args):
         print(classLabelValid)
         if classLabelValid != classLabelTrain:
             print("error in mapping")
+    #override image size with numofclasses we got from
+
+    data_info['n_classes'] = len(classToLabelValid)
+    model = create_model(data_info['img_size'], data_info['n_classes'], args)
+    patch_size = model.patch_dim
+    model.to(DEVICE)
 
     #    summary(model, input_size=(1, 1, 192))
     print(Fore.GREEN + '*' * 80)
@@ -368,6 +373,9 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
             loss, output, mask = model(images)
         elif args.model == 'vitmaskedvideoautoencoder':
             loss, output  = model(images)
+        elif args.model == 'vitmaskedvideoencoderWithHead':
+             output  = model(images)
+             loss = criterion(output, target.to(torch.int64))
 
         n += images.size(0)
         loss_val += float(loss.item() * images.size(0))
