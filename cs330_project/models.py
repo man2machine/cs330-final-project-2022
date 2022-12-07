@@ -101,9 +101,8 @@ class ShiftedPatchEmbed2d(nn.Module):
         super().__init__()
 
         self.in_channels = in_channels
-        self.embed_dim = self.embed_dim
-        self.shift_size = self.shift_size
-        self.tublet_size = self.tublet_size
+        self.embed_dim = embed_dim
+        self.shift_size = shift_size
         self.is_bchw = is_bchw
 
         self.patch_shifting = PatchShifting(shift_size)
@@ -155,9 +154,9 @@ class ShiftedPatchEmbed3d(nn.Module):
         super().__init__()
 
         self.in_channels = in_channels
-        self.embed_dim = self.embed_dim
-        self.shift_size = self.shift_size
-        self.tubelet_size = self.tubelet_size
+        self.embed_dim = embed_dim
+        self.shift_size = shift_size
+        self.tubelet_size = tubelet_size
         self.has_class_token = has_class_token
         self.is_bcthw = is_bcthw
 
@@ -185,13 +184,11 @@ class ShiftedPatchEmbed3d(nn.Module):
         else:
             out_visual = x if self.is_bcthw else rearrange(
                 x, 'b (t h w) d -> b d t h w', h=int(math.sqrt(x.size(1))))
-        
+
         b, c, t, h, w = out_visual.shape
-        out_visual = out_visual.transpose(1, 2)
-        out_visual = out_visual.view(-1, c, h, w)
+        out_visual = out_visual.view(b, -1, h, w)
         out_visual = self.patch_shifting(out_visual)
-        out_visual = out_visual.view(b, t, c, h, w)
-        out_visual = out_visual.transpose(1, 2)
+        out_visual = out_visual.view(b, -1, t, h, w)
         out_visual = self.proj(out_visual)
 
         if self.has_class_token:
@@ -411,11 +408,14 @@ class ViTEncoder(nn.Module):
             *,
             in_img_size,
             in_channels=3,
+            in_num_frames,
             patch_size,
             embed_dim,
             depth,
             num_heads,
             mlp_dim_ratio,
+            spatio_temporal=False,
+            tubelet_size=None,
             head_dim=16,
             dropout=0.,
             pos_embed_dropout=0.,
@@ -427,24 +427,45 @@ class ViTEncoder(nn.Module):
         super().__init__()
         image_height, image_width = make_pair_shape(in_img_size)
         patch_height, patch_width = make_pair_shape(patch_size)
-        self.num_patches = (image_height // patch_height) * \
-            (image_width // patch_width)
+        temporal_multiplier = 1 if not spatio_temporal else (
+            in_num_frames // tubelet_size)
+        self.num_patches = (
+            (image_height // patch_height) *
+            (image_width // patch_width) *
+            temporal_multiplier)
         self.embed_dim = embed_dim
-        self.class_embed = class_embed
+        self.class_embed = bool(class_embed)
+        self.spatio_temporal = spatio_temporal
+        self.tublet_size = tubelet_size
 
         if not is_spt:
-            self.to_patch_embedding = PatchEmbed2d(
-                in_channels=in_channels,
-                patch_height=patch_height,
-                patch_width=patch_width,
-                embed_dim=embed_dim
-            )
+            if self.spatio_temporal:
+                self.to_patch_embedding = PatchEmbed3d(
+                    in_channels=in_channels,
+                    patch_height=patch_height,
+                    patch_width=patch_width,
+                    tubelet_size=tubelet_size,
+                    embed_dim=embed_dim)
+            else:
+                self.to_patch_embedding = PatchEmbed2d(
+                    in_channels=in_channels,
+                    patch_height=patch_height,
+                    patch_width=patch_width,
+                    embed_dim=embed_dim)
         else:
-            self.to_patch_embedding = ShiftedPatchEmbed2d(
-                in_channels=3,
-                embed_dim=self.embed_dim,
-                shift_size=patch_size,
-                is_bchw=True)
+            if self.spatio_temporal:
+                self.to_patch_embedding = ShiftedPatchEmbed3d(
+                    in_channels=3,
+                    embed_dim=self.embed_dim,
+                    shift_size=patch_size,
+                    tubelet_size=tubelet_size,
+                    is_bchw=True)
+            else:
+                self.to_patch_embedding = ShiftedPatchEmbed2d(
+                    in_channels=3,
+                    embed_dim=self.embed_dim,
+                    shift_size=patch_size,
+                    is_bchw=True)
 
         self.pos_embedding = nn.Parameter(
             torch.randn(1, self.num_patches + self.class_embed, self.embed_dim))
@@ -498,11 +519,14 @@ class ViTDecoder(nn.Module):
             out_img_size,
             in_channels=3,
             in_latent_dim,
+            in_num_frames,
             patch_size,
             embed_dim,
             depth,
             num_heads,
             mlp_dim_ratio,
+            spatio_temporal=False,
+            tubelet_size=None,
             head_dim=16,
             dropout=0.,
             pos_embed_dropout=0.,
@@ -515,13 +539,19 @@ class ViTDecoder(nn.Module):
 
         image_height, image_width = make_pair_shape(out_img_size)
         patch_height, patch_width = make_pair_shape(patch_size)
-        self.num_patches = (image_height // patch_height) * \
-            (image_width // patch_width)
+        temporal_multiplier = 1 if not spatio_temporal else (
+            in_num_frames // tubelet_size)
+        self.num_patches = (
+            (image_height // patch_height) *
+            (image_width // patch_width) *
+            temporal_multiplier)
         self.input_dim = in_latent_dim
         self.embed_dim = embed_dim
         self.patch_size = patch_size
-        self.class_embed = class_embed
-        self.use_masking = use_masking
+        self.class_embed = bool(class_embed)
+        self.use_masking = bool(use_masking)
+        self.spatio_temporal = spatio_temporal
+        self.tublet_size = tubelet_size
 
         self.encoder_to_decoder = nn.Linear(
             self.input_dim, self.embed_dim, bias=True)
