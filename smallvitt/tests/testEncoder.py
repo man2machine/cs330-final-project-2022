@@ -12,9 +12,9 @@ def test_VanillaEncoder():
 
 
 
-    encoder = ViTEncoder(img_size=img_size, patch_size=patch_size, num_classes=n_classes, dim=192,
+    model = ViTEncoder(img_size=img_size, patch_size=patch_size, num_classes=n_classes, dim=192,
                 mlp_dim_ratio=2, depth=9, heads=12, dim_head=192 // 12,
                 stochastic_depth=0.0, is_SPT=is_SPT, is_LSA=is_LSA, channels=3)
 
-    out = encoder(test_tensor)
+    out = model(test_tensor)
     print (out.shape)

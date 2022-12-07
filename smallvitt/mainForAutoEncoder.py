@@ -27,7 +27,7 @@ import warnings
 warnings.filterwarnings("ignore", category=Warning)
 
 best_acc1 = 0
-MODELS = ['vitautoencoder', 'vitautomaskedencoder']
+MODELS = ['vitautoencoder', 'vitautomaskedencoder', 'vitencoder']
 
 
 def init_parser():
@@ -56,7 +56,7 @@ def init_parser():
 
     parser.add_argument('--weight-decay', default=5e-2, type=float, help='weight decay (default: 1e-4)')
 
-    parser.add_argument('--model', type=str, default='vitmaskedautoencoder', choices=MODELS)
+    parser.add_argument('--model', type=str, default='vitencoder', choices=MODELS)
 
     parser.add_argument('--disable-cos', action='store_true', help='disable cosine lr schedule')
 
@@ -293,9 +293,12 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
 
     for i, (images, target) in enumerate(train_loader):
         if (not args.no_cuda) and torch.cuda.is_available():
-            images = images.cuda(args.gpu, non_blocking=True)
+            pred = images.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
-
+            loss = criterion(pred, target)
+        if args.model == 'vitencoder':
+            pred  = model(images)
+            loss = criterion(pred, target)
         if args.model == 'vitautoencoder':
             loss, output  = model(images)
         elif args.model == 'vitmaskedautoencoder':
