@@ -38,9 +38,13 @@ class VitMaskedEncoderWithMetaHead(nn.Module):
         #we are setting it from calling class
         self.vitmaskedvideoautoencoder=vitmaskedvideoautoencoder
         self.latentOriginalprojection =vitmaskedvideoautoencoder.num_patches * vitmaskedvideoautoencoder.dim
-        self.latentReduceprojection =   2056
 
-        self.reducedim = nn.Linear(self.latentOriginalprojection , self.latentReduceprojection, bias=False)
+        kernel_size=3
+        channels_out= 50
+        #self.reducedim = nn.Linear(self.latentOriginalprojection , self.latentReduceprojection, bias=False)
+        self.reducedim =  nn.Conv1d(vitmaskedvideoautoencoder.num_patches, channels_out, kernel_size)
+        L = vitmaskedvideoautoencoder.dim - (kernel_size-1)
+        self.latentReduceprojection =  channels_out * L
 
         if rnn_type == "lstm":
             self.layer1 = torch.nn.LSTM(self.latentReduceprojection +  num_classes , hidden_dim, batch_first=True,
@@ -81,8 +85,9 @@ class VitMaskedEncoderWithMetaHead(nn.Module):
         #t=token count
         print(self.latentOriginalprojection)
         latent_videos = self.vitmaskedvideoautoencoder.forward(input_images)
-        latent_videos =  rearrange(latent_videos, ' (b k n) t d -> b k n (t d)',b=B,k=K,n=N )
         latent_videos = self.reducedim(latent_videos)
+        latent_videos =  rearrange(latent_videos, ' (b k n) t d -> b k n (t d)',b=B,k=K,n=N )
+        #latent_videos = self.reducedim(latent_videos)
         input_labels = torch.nn.functional.one_hot(input_labels, self.vitmaskedvideoautoencoder.num_classes)
 
 
