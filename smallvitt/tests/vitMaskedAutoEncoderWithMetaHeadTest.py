@@ -11,7 +11,8 @@ def test_AutoEncoder():
     patch_size=4
     n_classes=3
     #K are shots size of support set
-    # (B, N, K+1, C_{in}, T, H, W)  d=Depth means number of frames in video N is batch size C_{in} are channels in
+    #N is n-way of number of classes
+    # (B, N, K+1, C_{in}, T, H, W)  T=Depth means number of frames in video N is batch size C_{in} are channels in
     test_tensor = torch.randn(2, 2, 3, 3, 16,32,32) # we have sampled 16 frames from video with batch size of 1
     B = test_tensor.shape[0]
     sd=0.1 #stochastic depth
