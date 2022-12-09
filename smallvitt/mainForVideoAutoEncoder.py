@@ -162,11 +162,11 @@ DEVICE = torch.device("cpu")
 print(DEVICE)
 
 import sys
-
-def build_pretraining_dataset(args, classToLabelMap=None):
+#"compositeDataset/train/"
+def build_pretraining_dataset(args, videoPath, classToLabelMap=None):
     transform = DataAugmentationForVideoMAE(args)
     dataset = VideoMAE(
-        root="compositeDataset/train/",
+        root=videoPath,
         setting=args.data_path,
         video_ext='mp4',
         is_color=True,
@@ -207,8 +207,8 @@ def main(args):
     args.patch_size = patch_size
 
     # get dataset
-    train_dataset,classToLabelTrain = build_pretraining_dataset(args)
-    val_dataset,classToLabelValid = build_pretraining_dataset(args, classToLabelTrain)
+    train_dataset,classToLabelTrain = build_pretraining_dataset(args, "compositeDataset/train/")
+    val_dataset,classToLabelValid = build_pretraining_dataset(args, "compositeDataset/test/", classToLabelTrain)
 
 
 
