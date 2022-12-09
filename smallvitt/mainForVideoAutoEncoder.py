@@ -191,14 +191,21 @@ def build_pretraining_dataset(args, videoPath, classToLabelMap=None):
 # Logging and Visualization
 
 
+def labelValidation(validMap, trainMap):
+    # test if we are getting same class to label set for both validation and training set. This is
+    for classNum in validMap:
+        classLabelTrain = trainMap[classNum]
+        classLabelValid = validMap[classNum]
+        print(classLabelTrain)
+        print(classLabelValid)
+        if classLabelValid != classLabelTrain:
+            print("error in mapping")
 
 
 def main(args):
     global best_acc1
 
     data_info = datainfo(logger, args)
-
-
 
     patch_size=4
 
@@ -210,16 +217,9 @@ def main(args):
     train_dataset,classToLabelTrain = build_pretraining_dataset(args, "compositeDataset/train/")
     val_dataset,classToLabelValid = build_pretraining_dataset(args, "compositeDataset/test/", classToLabelTrain)
 
+    labelValidation(classToLabelTrain, classToLabelValid)
 
 
-    #test if we are getting same class to label set for both validation and training set
-    for classNum in classToLabelValid:
-        classLabelTrain = classToLabelTrain[classNum]
-        classLabelValid = classToLabelValid[classNum]
-        print(classLabelTrain)
-        print(classLabelValid)
-        if classLabelValid != classLabelTrain:
-            print("error in mapping")
     #override image size with numofclasses we got from
 
     data_info['n_classes'] = len(classToLabelValid)
@@ -267,33 +267,6 @@ def main(args):
         logger.debug(f'Repeated Aug({args.ra}) used')
         print('*' * 80 + Style.RESET_ALL)
 
-    '''
-        Data Augmentation
-    '''
-    augmentations = []
-
-    augmentations += [
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomCrop(data_info['img_size'], padding=4)
-    ]
-
-
-
-    augmentations += [
-        transforms.ToTensor(),
-        *normalize]
-
-    if args.re > 0:
-        from utils.random_erasing import RandomErasing
-        print(Fore.YELLOW + '*' * 80)
-        logger.debug(f'Random erasing({args.re}) used ')
-        print('*' * 80 + Style.RESET_ALL)
-
-        augmentations += [
-            RandomErasing(probability=args.re, sh=args.re_sh, r1=args.re_r1, mean=data_info['stat'][0])
-        ]
-
-    augmentations = transforms.Compose(augmentations)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, num_workers=args.workers, pin_memory=True,
