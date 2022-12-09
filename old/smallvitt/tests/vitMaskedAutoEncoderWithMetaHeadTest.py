@@ -3,7 +3,7 @@ import torch.nn as nn
 from  smallvitt.models.vitMaskedVideoEncoderWithMetaHead import  VitMaskedEncoderWithMetaHead
 from  smallvitt.models.vitMaskedVideoEncoder import  ViTMaskedVideoEncoder
 from einops import rearrange, repeat
-
+#test cases for 
 DEVICE = torch.device("cpu")
 print(DEVICE)
 def test_AutoEncoder():
