@@ -1,0 +1,7 @@
+ssh faraz333@20.15.96.228
+https://github.com/facebookresearch/mae_st/blob/394368eae4fc0cc42aa863ef96da67569c0966b1/models_mae.py
+https://github.com/MCG-NJU/VideoMAE/blob/main/modeling_pretrain.py
+
+faraz333@20.15.90.244
+virtualenv --python=/usr/bin/python3.8 venv
+pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
