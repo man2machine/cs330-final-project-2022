@@ -1,11 +1,10 @@
 .idea
 logs/
-smallvitt/dataset
-smallvitt/save
-smallvitt/tensorboard
+smallvitt
+*.zip
 
 ########################################
-# From github .gitignore from Python
+# From Github .gitignore from Python
 ########################################
 
 # Byte-compiled / optimized / DLL files

@@ -12,8 +12,8 @@ import torch
 
 def unpatchify(x, patch_size):
     """
-    x: (N, L, patch_size**2 *3)
-    imgs: (N, 3, H, W)
+    x: [n, l, c * p**2]
+    imgs: (n, c, h, w)
     """
     
     p = patch_size
@@ -27,7 +27,7 @@ def unpatchify(x, patch_size):
 
 def patchify(imgs, patch_size):
     """
-    imgs: (N, 3, H, W)
+    imgs: [n, c, h, w]
     x: (N, L, patch_size**2 *3)
     """
     
@@ -72,7 +72,7 @@ def random_masking(x, mask_ratio):
 def autoencoder_loss(imgs, pred, mask=None, norm_pix_loss=False):
     """
     imgs: [N, 3, H, W]
-    pred: [N, L, p*p*3]
+    pred: [N, L, p*p*num_channels]
     mask: [N, L], 0 is keep, 1 is remove,
     """
     

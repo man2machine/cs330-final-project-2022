@@ -1,14 +1,23 @@
-import torch
-import torchvision.transforms.functional as F
-import warnings
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec  6 22:08:39 2022
+
+@author: Shahir, Faraz, Pratyush
+"""
+
 import random
-import numpy as np
-import torchvision
-from PIL import Image, ImageOps
 import numbers
 
+import numpy as np
 
-class GroupRandomCrop(object):
+import torch
+import torchvision
+import torchvision.transforms.functional as F
+
+from PIL import Image
+
+
+class GroupRandomCrop:
     def __init__(self, size):
         if isinstance(size, numbers.Number):
             self.size = (int(size), int(size))
@@ -36,7 +45,7 @@ class GroupRandomCrop(object):
         return (out_images, label)
 
 
-class GroupCenterCrop(object):
+class GroupCenterCrop:
     def __init__(self, size):
         self.worker = torchvision.transforms.CenterCrop(size)
 
@@ -45,7 +54,7 @@ class GroupCenterCrop(object):
         return ([self.worker(img) for img in img_group], label)
 
 
-class GroupNormalize(object):
+class GroupNormalize:
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
@@ -71,8 +80,9 @@ class GroupGrayScale(object):
         return ([self.worker(img) for img in img_group], label)
 
 
-class GroupScale(object):
-    """ Rescales the input PIL.Image to the given 'size'.
+class GroupScale:
+    """
+    Rescales the input PIL.Image to the given 'size'.
     'size' will be the size of the smaller edge.
     For example, if height > width, then image will be
     rescaled to (size * height / width, size)
@@ -88,10 +98,9 @@ class GroupScale(object):
         return ([self.worker(img) for img in img_group], label)
 
 
-class GroupMultiScaleCrop(object):
-
+class GroupMultiScaleCrop:
     def __init__(self, input_size, scales=None, max_distort=1, fix_crop=True, more_fix_crop=True):
-        self.scales = scales if scales is not None else [1, 875, .75, .66]
+        self.scales = scales if scales is not None else [1, 0.875, 0.75, 0.66]
         self.max_distort = max_distort
         self.fix_crop = fix_crop
         self.more_fix_crop = more_fix_crop
@@ -162,8 +171,7 @@ class GroupMultiScaleCrop(object):
         return ret
 
 
-class Stack(object):
-
+class Stack:
     def __init__(self, roll=False):
         self.roll = roll
 
@@ -173,36 +181,9 @@ class Stack(object):
         if img_group[0].mode == 'L':
             return (np.concatenate([np.expand_dims(x, 2) for x in img_group], axis=2), label)
         elif img_group[0].mode == 'RGB':
-            if self.roll:
-                return (np.concatenate([np.array(x)[:, :, ::-1] for x in img_group], axis=2), label)
-            else:
-                return (np.concatenate(img_group, axis=2), label)
+            return (np.concatenate(img_group, axis=2), label)
 
 
-class ToTorchFormatTensor(object):
-    """ Converts a PIL.Image (RGB) or numpy.ndarray (H x W x C) in the range [0, 255]
-    to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0] """
-
-    def __init__(self, div=True):
-        self.div = div
-
-    def __call__(self, pic_tuple):
-        pic, label = pic_tuple
-
-        if isinstance(pic, np.ndarray):
-            # handle numpy array
-            img = torch.from_numpy(pic).permute(2, 0, 1).contiguous()
-        else:
-            # handle PIL Image
-            img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
-            img = img.view(pic.size[1], pic.size[0], len(pic.mode))
-            # put it from HWC to CHW format
-            # yikes, this transpose takes 80% of the loading time/CPU
-            img = img.transpose(0, 1).transpose(0, 2).contiguous()
-        return (img.float().div(255.) if self.div else img.float(), label)
 
 
-class IdentityTransform(object):
 
-    def __call__(self, data):
-        return data

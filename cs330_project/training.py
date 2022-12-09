@@ -2,7 +2,7 @@
 """
 Created on Sat May  8 15:05:21 2021
 
-@author: Shahir
+@author: Shahir, Faraz, Pratyush
 """
 
 import os
@@ -159,8 +159,8 @@ def train_one_epoch(
 
         with torch.set_grad_enabled(True):
             outputs = model(samples)
-            loss, _, _ = outputs
-            # loss = criterion(outputs, targets)
+            latent, pred = outputs
+            loss = criterion(pred, targets)
             loss /= grad_accum_steps
         loss.backward()
 

@@ -2,7 +2,8 @@
 """
 Created on Sat May  8 15:05:40 2021
 
-@author: Shahir
+@author: Shahir, Faraz, Pratyush
+Modified from: https://github.com/MCG-NJU/VideoMAE
 """
 
 import os
@@ -20,9 +21,16 @@ import torchvision
 from torchvision import transforms
 import torchvision.transforms.functional as TF
 
+from cs330_project.augmentation import (
+    GroupNormalize,
+    GroupMultiScaleCrop,
+    Stack
+)
+
 
 class VideoDatasetType:
     TEMP = "temp"
+
 
 DATASET_TO_NUM_CLASSES = {
     VideoDatasetType.TEMP: 10
@@ -81,8 +89,10 @@ class MaskingGenerator:
     def __init__(self, input_size, mask_ratio):
         self.num_frames, self.height, self.width = input_size
         self.num_patches_per_frame = self.height * self.width
-        self.num_masked_patches_per_frame = int(mask_ratio * self.num_patches_per_frame)
-        self.num_visible_patches_per_frame = self.num_patches_per_frame - self.num_masked_patches_per_frame
+        self.num_masked_patches_per_frame = int(
+            mask_ratio * self.num_patches_per_frame)
+        self.num_visible_patches_per_frame = self.num_patches_per_frame - \
+            self.num_masked_patches_per_frame
         self.total_masks = self.num_frames * self.num_masked_patches_per_frame
         self.rng = np.random.default_rng()
 
@@ -90,14 +100,17 @@ class MaskingGenerator:
         shuffle_indices = np.arange(self.num_patches_per_frame)
         self.rng.shuffle(mask_per_frame)
         unshuffle_indices = np.argsort(shuffle_indices)
-        
-        masked_indices = shuffle_indices[:, :self.num_visible_patches_per_frame]
-        
+
+        masked_indices = \
+            shuffle_indices[:, :self.num_visible_patches_per_frame]
+
         mask_per_frame = np.ones([self.num_patches_per_frame])
         mask_per_frame[:, :self.num_visible_patches_per_frame] = 0
-        mask_per_frame = np.take(mask_per_frame, unshuffle_indices, axis=0) # [H * W]
-        mask = np.tile(mask_per_frame, (self.num_frames, 1)).flatten() # [H * W * T, 1]
-        
+        mask_per_frame = np.take(
+            mask_per_frame, unshuffle_indices, axis=0)  # [h * w]
+        mask = np.tile(
+            mask_per_frame, (self.num_frames, 1)).flatten()  # [h * w * t, 1]
+
         return mask, shuffle_indices, unshuffle_indices, masked_indices
 
 
@@ -105,23 +118,21 @@ class MaskedVideoAutoencoderTransform:
     def __init__(self, input_size, mask_window_size=1, tube_masking=False, mask_ratio=0.75):
         self.input_mean = [0.485, 0.456, 0.406]  # ImageNet default mean
         self.input_std = [0.229, 0.224, 0.225]  # ImageNet default std
-        normalize = GroupNormalize(self.input_mean, self.input_std)
-        self.train_augmentation = GroupMultiScaleCrop(
-            input_size, [1, .875, .75, .66])
         self.augment = transforms.Compose([
-            self.train_augmentation,
-            Stack(roll=False),
-            ToTorchFormatTensor(div=True),
-            normalize,
+            GroupMultiScaleCrop(
+                input_size,
+                [1, 0.875, 0.75, 0.66]),
+            Stack(),
+            transforms.ToTensor(),
+            GroupNormalize(self.input_mean, self.input_std),
         ])
         if tube_masking:
             self.masked_position_generator = MaskingGenerator(
-                mask_window_size, mask_ratio
-            )
+                mask_window_size, mask_ratio)
 
     def __call__(self, images):
-        process_data, _ = self.augment(images)
-        return process_data, *self.masked_position_generator()
+        images, labels = self.augment(images)
+        return images, self.masked_position_generator()
 
 
 def get_dataloaders(datasets,

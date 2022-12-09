@@ -15,9 +15,6 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
-from cs330_project.models.small_vit.utils.drop_path import DropPath
-from cs330_project.models.small_vit.models.shifted_patch_tokenization import ShiftedPatchEmbed2d
-
 
 def make_pair_shape(t):
     return t if isinstance(t, tuple) else (t, t)
@@ -25,6 +22,45 @@ def make_pair_shape(t):
 
 def max_neg_value(tensor):
     return -torch.finfo(tensor.dtype).max
+
+
+class DropPath(nn.Module):
+    """
+    Obtained from: github.com:rwightman/pytorch-image-models
+    Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
+    """
+
+    def __init__(self, drop_prob=None):
+        super(DropPath, self).__init__()
+        self.drop_prob = drop_prob
+
+    @staticmethod
+    def drop_path(
+            x,
+            drop_prob=0.0,
+            training=False):
+        """
+        Obtained from: github.com:rwightman/pytorch-image-models
+        Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
+        This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
+        the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
+        See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for
+        changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
+        'survival rate' as the argument.
+        """
+        if drop_prob == 0. or not training:
+            return x
+        keep_prob = 1 - drop_prob
+        # work with diff dim tensors, not just 2D ConvNets
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        random_tensor = keep_prob + \
+            torch.rand(shape, dtype=x.dtype, device=x.device)
+        random_tensor.floor_()  # binarize
+        output = x.div(keep_prob) * random_tensor
+        return output
+
+    def forward(self, x):
+        return self.drop_path(x, self.drop_prob, self.training)
 
 
 class PatchShifting(nn.Module):
@@ -39,7 +75,7 @@ class PatchShifting(nn.Module):
 
         super().__init__()
         self.mode = mode
-        self.expansion = 9 if self.mode == self.CARDINAL_8_DIRECTIONS_MODE ele 5
+        self.expansion = 9 if self.mode == self.CARDINAL_8_DIRECTIONS_MODE else 5
         self.half_shift = int(shift_size * (1 / 2))
 
     def forward(self, x):
@@ -107,7 +143,9 @@ class ShiftedPatchEmbed2d(nn.Module):
 
         self.patch_shifting = PatchShifting(shift_size)
         self.patch_dim = (
-            in_channels * self.patch_shifting.expansion) * (shift_size**2)
+            in_channels *
+            self.patch_shifting.expansion *
+            (shift_size**2))
 
         if has_class_token:
             self.class_linear = nn.Linear(in_channels, embed_dim)
@@ -162,7 +200,10 @@ class ShiftedPatchEmbed3d(nn.Module):
 
         self.patch_shifting = PatchShifting(shift_size)
         self.patch_dim = (
-            in_channels * self.patch_shifting.expansion) * (shift_size**2)
+            in_channels *
+            self.patch_shifting.expansion *
+            (shift_size**2) *
+            tubelet_size)
 
         if has_class_token:
             self.class_linear = nn.Linear(in_channels, embed_dim)
@@ -199,7 +240,15 @@ class ShiftedPatchEmbed3d(nn.Module):
 
 
 class PatchEmbed2d(nn.Module):
-    def __init__(self, in_channels, patch_height, patch_width, embed_dim):
+    def __init__(
+            self,
+            in_channels,
+            patch_height,
+            patch_width,
+            embed_dim):
+
+        super().__init__()
+
         self.in_channels = in_channels
         self.patch_height = patch_height
         self.patch_width = patch_width
@@ -221,12 +270,21 @@ class PatchEmbed2d(nn.Module):
 
 
 class PatchEmbed3d(nn.Module):
-    def __init__(self, in_channels, patch_height, patch_width, tubelet_size, embed_dim):
+    def __init__(
+            self,
+            in_channels,
+            patch_height,
+            patch_width,
+            tubelet_size,
+            embed_dim):
+
+        super().__init__()
+
         self.in_channels = in_channels
         self.patch_height = patch_height
         self.patch_width = patch_width
         self.tubelet_size = tubelet_size
-        self.patch_dim = in_channels * patch_height * patch_width
+        self.patch_dim = in_channels * patch_height * patch_width * tubelet_size
         self.embed_dim = embed_dim
 
         self.proj = nn.Sequential(
@@ -252,6 +310,7 @@ class PreNorm(nn.Module):
             fn):
 
         super().__init__()
+
         self.dim = dim
         self.num_tokens = num_tokens
         self.norm = nn.LayerNorm(dim)
@@ -267,9 +326,10 @@ class TransformerInnerMlp(nn.Module):
             dim,
             num_patches,
             hidden_dim,
-            dropout=0.):
+            dropout=0.0):
 
         super().__init__()
+
         self.dim = dim
         self.hidden_dim = hidden_dim
         self.num_patches = num_patches
@@ -293,7 +353,7 @@ class Attention(nn.Module):
             num_patches,
             num_heads=8,
             head_dim=64,
-            dropout=0.,
+            dropout=0.0,
             is_lsa=False):
 
         super().__init__()
@@ -361,8 +421,8 @@ class Transformer(nn.Module):
                  num_heads,
                  head_dim,
                  mlp_dim_ratio,
-                 dropout=0.,
-                 stochastic_depth=0.,
+                 dropout=0.0,
+                 stochastic_depth=0.0,
                  is_lsa=False):
 
         super().__init__()
@@ -408,23 +468,24 @@ class ViTEncoder(nn.Module):
             *,
             in_img_size,
             in_channels=3,
-            in_num_frames,
             patch_size,
+            spatio_temporal=False,
+            in_num_frames=None,
+            tubelet_size=None,
             embed_dim,
             depth,
             num_heads,
             mlp_dim_ratio,
-            spatio_temporal=False,
-            tubelet_size=None,
             head_dim=16,
-            dropout=0.,
-            pos_embed_dropout=0.,
-            stochastic_depth=0.,
+            dropout=0.0,
+            pos_embed_dropout=0.0,
+            stochastic_depth=0.0,
             class_embed=False,
             is_lsa=False,
             is_spt=False):
 
         super().__init__()
+
         image_height, image_width = make_pair_shape(in_img_size)
         patch_height, patch_width = make_pair_shape(patch_size)
         temporal_multiplier = 1 if not spatio_temporal else (
@@ -498,12 +559,11 @@ class ViTEncoder(nn.Module):
 
         if masked_indices is not None:
             x = torch.gather(
-                x, dim=1, index=masked_indices.unsqueeze(-1).repeat(1, 1, d)
-            )
+                x, dim=1, index=masked_indices.unsqueeze(-1).repeat(1, 1, d))
 
         x = self.embed_dropout(x)
         x = self.transformer(x)
-        x = self.norm(x[:, 0])
+        x = self.norm(x)
 
         if self.class_embed:
             # remove cls token
@@ -519,18 +579,18 @@ class ViTDecoder(nn.Module):
             out_img_size,
             in_channels=3,
             in_latent_dim,
-            in_num_frames,
             patch_size,
+            spatio_temporal=False,
+            in_num_frames=None,
+            tubelet_size=None,
             embed_dim,
             depth,
             num_heads,
             mlp_dim_ratio,
-            spatio_temporal=False,
-            tubelet_size=None,
             head_dim=16,
-            dropout=0.,
-            pos_embed_dropout=0.,
-            stochastic_depth=0.,
+            dropout=0.0,
+            pos_embed_dropout=0.0,
+            stochastic_depth=0.0,
             class_embed=False,
             use_masking=False,
             is_lsa=False):
@@ -574,19 +634,19 @@ class ViTDecoder(nn.Module):
             dropout,
             stochastic_depth,
             is_lsa=is_lsa)
+        
         self.norm = nn.LayerNorm(self.embed_dim)
         self.pred = nn.Linear(
             self.embed_dim, in_channels * self.patch_size**2, bias=True)  # decoder to patch
 
-    def forward(self, x, unshuffle_indices):
+    def forward(self, x, unshuffle_indices=None):
         x = self.encoder_to_decoder(x)
         b, n, d = x.shape
 
         if self.use_masking:
             x = torch.cat((x, self.mask_token.expand(b, -1, -1)), dim=1)
             x = torch.gather(
-                x, dim=1, index=unshuffle_indices.unsqueeze(-1).repeat(1, 1, d)
-            )  # unshuffle
+                x, dim=1, index=unshuffle_indices.unsqueeze(-1).repeat(1, 1, d))  # unshuffle
 
         if self.class_embed:
             class_tokens = repeat(self.class_token, '() n d -> b n d', b=b)
@@ -612,17 +672,20 @@ class ViTAutoEncoder(nn.Module):
             in_img_size,
             in_channels=3,
             patch_size,
+            spatio_temporal=False,
+            in_num_frames=None,
+            tubelet_size=None,
             encoder_embed_dim,
             encoder_depth,
             encoder_num_heads,
+            decoder_embed_dim,
             decoder_depth,
             decoder_num_heads,
-            decoder_embed_dim,
             mlp_dim_ratio,
             head_dim=16,
-            dropout=0.,
-            pos_embed_dropout=0.,
-            stochastic_depth=0.,
+            dropout=0.0,
+            pos_embed_dropout=0.0,
+            stochastic_depth=0.0,
             class_embed=False,
             is_lsa=False,
             is_spt=False,
@@ -637,41 +700,49 @@ class ViTAutoEncoder(nn.Module):
 
         self.encoder = ViTEncoder(
             in_img_size=in_img_size,
+            in_channels=in_channels,
             patch_size=patch_size,
+            spatio_temporal=spatio_temporal,
+            in_num_frames=in_num_frames,
+            tubelet_size=tubelet_size,
             embed_dim=encoder_embed_dim,
             depth=encoder_depth,
             num_heads=encoder_num_heads,
             mlp_dim_ratio=mlp_dim_ratio,
-            in_channels=in_channels,
             head_dim=head_dim,
-            drouput=dropout,
+            dropout=dropout,
             pos_embed_dropout=pos_embed_dropout,
             stochastic_depth=stochastic_depth,
             class_embed=class_embed,
             is_lsa=is_lsa,
-            is_spt=is_spt
-        )
+            is_spt=is_spt)
 
         self.decoder = ViTDecoder(
             out_img_size=in_img_size,
             in_channels=in_channels,
             in_latent_dim=encoder_embed_dim,
             patch_size=patch_size,
-            mlp_dim_ratio=mlp_dim_ratio,
+            spatio_temporal=spatio_temporal,
+            in_num_frames=in_num_frames,
+            tubelet_size=tubelet_size,
+            embed_dim=decoder_embed_dim,
             depth=decoder_depth,
             num_heads=decoder_num_heads,
-            embed_dim=decoder_embed_dim,
+            mlp_dim_ratio=mlp_dim_ratio,
             head_dim=head_dim,
             dropout=dropout,
             pos_embed_dropout=pos_embed_dropout,
             stochastic_depth=stochastic_depth,
             class_embed=class_embed,
-            is_lsa=is_lsa
-        )
+            is_lsa=is_lsa)
 
-    def forward(self, x, mask=None):
-        latent = self.encoder(x, mask=mask)
-        pred = self.decoder(latent)
+    def forward(self, x, mask_info=None):
+        if self.use_masking:
+            _, _, unshuffle_indices, masked_indices = mask_info
+        else:
+            unshuffle_indices, masked_indices = None, None
+        latent = self.encoder(x, masked_indices=masked_indices)
+        pred = self.decoder(latent, unshuffle_indices=unshuffle_indices)
 
         return latent, pred
 
@@ -704,14 +775,15 @@ class ViTClassifier:
             in_channels=3,
             patch_size,
             num_classes,
-            dim,
-            depth,
-            num_heads,
+            encoder_embed_dim,
+            encoder_depth,
+            encoder_num_heads,
             mlp_dim_ratio,
             head_dim=16,
-            dropout=0.,
-            embed_dropout=0.,
-            stochastic_depth=0.,
+            dropout=0.0,
+            embed_dropout=0.0,
+            head_dropout=0.0,
+            stochastic_depth=0.0,
             is_lsa=False,
             is_spt=False):
 
@@ -719,9 +791,9 @@ class ViTClassifier:
             in_img_size=img_size,
             patch_size=patch_size,
             num_classes=num_classes,
-            embed_dim=dim,
-            depth=depth,
-            num_heads=num_heads,
+            embed_dim=encoder_embed_dim,
+            depth=encoder_depth,
+            num_heads=encoder_num_heads,
             mlp_dim_ratio=mlp_dim_ratio,
             in_channels=in_channels,
             head_dim=head_dim,
@@ -729,16 +801,22 @@ class ViTClassifier:
             pos_embed_dropout=embed_dropout,
             stochastic_depth=stochastic_depth,
             is_lsa=is_lsa,
-            is_spt=is_spt
-        )
+            is_spt=is_spt)
 
         self.head = ViTClassifierHead(
-            input_dim=dim,
-            num_classes=num_classes
-        )
+            input_dim=encoder_embed_dim,
+            num_classes=num_classes)
+        
+        self.head_norm = nn.LayerNorm(encoder_embed_dim)
+        self.head_dropout = nn.Dropout(head_dropout)
 
     def forward(self, x):
         x = self.encoder(x)
+        
+        x = x.mean(dim=1)
+        x = self.head_norm(x)
+        x = self.head_dropout(x)
+        
         x = self.head(x)
 
         return x
