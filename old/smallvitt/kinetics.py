@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 import video_transforms as video_transforms
 import volume_transforms as volume_transforms
 
-
+#Updated logic to load dataset from json annotation files
 class VideoClsDataset(Dataset):
     """Load your own video classification dataset."""
 
