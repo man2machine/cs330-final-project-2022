@@ -32,7 +32,7 @@ warnings.filterwarnings("ignore", category=Warning)
 best_acc1 = 0
 MODELS = ['vitMaskedVideoAutoEncoder', 'vitMaskedVideoEncoderWithHead', 'vitMaskedVideoEncoderWithMetaHead' ]
 
-
+#contains logic to load video data as well as training and validation dataset loaders. 
 def init_parser():
     parser = argparse.ArgumentParser(description='TinyVirat Dataset')
     # parser.add_argument('--model', default='vit', type=str, help='model vit')
