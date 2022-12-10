@@ -1,6 +1,6 @@
 import torch
 from torch import nn, einsum
-from smallvitt.utils.drop_path import DropPath
+from vitmaindriver.smallvitmeta.utils.drop_path import DropPath
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from .SPT import ShiftedPatchTokenization
@@ -54,52 +54,6 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         return self.net(x)
-
-#Attenstion Space Time  (dim, num_patches, heads=heads, dim_head=dim_head, dropout=dropout, is_LSA=is_LSA)
-class AttentionST(nn.Module):
-    def __init__(
-            self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.,
-            proj_drop=0., num_patches=320, dropout= 0.5, dim_head=None):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        if dim_head is not None:
-            head_dim = dim_head
-        all_head_dim = head_dim * self.num_heads
-        self.scale = qk_scale or head_dim ** -0.5
-
-        self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
-        if qkv_bias:
-            self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-            self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
-        else:
-            self.q_bias = None
-            self.v_bias = None
-
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(all_head_dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x):
-        B, N, C = x.shape
-        qkv_bias = None
-        if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-        qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
-
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
 
 
 class Attention(nn.Module):
@@ -155,9 +109,7 @@ class Attention(nn.Module):
             flops += (self.dim + 2) * self.inner_dim * 3 * self.num_patches
             flops += self.dim * self.inner_dim * 3
 
-#  def __init__(
-#             self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.,
-#             proj_drop=0., attn_head_dim=None):
+
 class Transformer(nn.Module):
     def __init__(self, dim, num_patches, depth, heads, dim_head, mlp_dim_ratio, dropout=0., stochastic_depth=0.,
                  is_LSA=False):
@@ -166,8 +118,6 @@ class Transformer(nn.Module):
         self.scale = {}
 
 
-        #AttentionST from VideoMAE code based can be plugged-in by replacing Attention by AttentionST
-        #num_heads
         for i in range(depth):
             self.layers.append(nn.ModuleList([
                 PreNorm(num_patches, dim,
@@ -186,26 +136,28 @@ class Transformer(nn.Module):
         return x
 
 
-class ViTMaskedVideoAutoEncoder(nn.Module):
-    def __init__(self, *, img_size, patch_size, frames_depth, num_classes, dim, depth, heads,  mlp_dim_ratio, channels=3, decoder_depth, decoder_heads,decoder_dim,
-                 dim_head=16, dropout=0., emb_dropout=0., stochastic_depth=0., tubelet_size=2, is_LSA=False, is_SPT=False,norm_pix_loss=False, in_chans=3):
+class ViTMaskedAutoEncoder(nn.Module):
+    def __init__(self, *, img_size, patch_size, num_classes, dim, depth, heads,  mlp_dim_ratio, channels=3, decoder_depth, decoder_heads,decoder_dim,
+                 dim_head=16, dropout=0., emb_dropout=0., stochastic_depth=0., is_LSA=False, is_SPT=False,norm_pix_loss=False, in_chans=3):
 
         super().__init__()
         image_height, image_width = pair(img_size)
         patch_height, patch_width = pair(patch_size)
-        self.image_height,  self.image_width= pair(img_size)
-        self.num_patches = int( (image_height // patch_height) * (image_width // patch_width) * (frames_depth/tubelet_size))
+        self.num_patches = (image_height // patch_height) * (image_width // patch_width)
         self.patch_dim = channels * patch_height * patch_width
         self.dim = dim
         self.num_classes = num_classes
         self.decoder_dim=decoder_dim
         self.patch_size = patch_size
-        self.frames_depth = frames_depth
-        self.tubelet_size= tubelet_size
-        self.numChannels = in_chans
 
-        self.to_patch_embedding = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=dim, tubelet_size=tubelet_size)
+        if not is_SPT:
+            self.to_patch_embedding = nn.Sequential(
+                Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=patch_height, p2=patch_width),
+                nn.Linear(self.patch_dim, self.dim)
+            )
+
+        else:
+            self.to_patch_embedding = ShiftedPatchTokenization(3, self.dim, patch_size, is_pe=True)
 
         self.pos_embedding =  nn.Parameter(torch.zeros(1, self.num_patches + 1, self.dim), requires_grad=False)
 
@@ -219,7 +171,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         self.decoder_embed = nn.Linear(self.dim, self.decoder_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, self.decoder_dim))
 
-        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, self.num_patches , decoder_dim), requires_grad=False)
+        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, decoder_dim), requires_grad=False)
 
 
         self.decoder_dropout = nn.Dropout(emb_dropout)
@@ -228,8 +180,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
                                        stochastic_depth, is_LSA=is_LSA)
 
         self.decoder_norm = nn.LayerNorm(self.decoder_dim)
-        #we have tublelet factor as well so we need to consider that
-        self.decoder_pred = nn.Linear(self.decoder_dim, patch_size ** 2 * in_chans* self.tubelet_size, bias=True)  # decoder to patch
+        self.decoder_pred = nn.Linear(self.decoder_dim, patch_size ** 2 * in_chans, bias=True)  # decoder to patch
         # --------------------------------------------------------------------------
 
         self.norm_pix_loss = norm_pix_loss
@@ -237,70 +188,53 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         self.apply(init_weights)
 
 
-    def forward(self, imgs):
+    def forward(self, imgs, mask_ratio=0.75):
 
-        latent = self.forwardEncoder(imgs)
-        pred = self.forwardDecoder(latent)  # [N, L, p*p*3]
-        loss = self.forward_loss(imgs, pred)
-        return loss, pred
-
-   # def forward(self, x, mask):
-   #     _, _, T, _, _ = x.shape
-   #     x_vis = self.encoder(x, mask)  # [B, N_vis, C_e]
-   #     x_vis = self.encoder_to_decoder(x_vis)  # [B, N_vis, C_d]
-   #     B, N, C = x_vis.shape
-   #     # we don't unshuffle the correct visible token order,
-   #     # but shuffle the pos embedding accorddingly.
-   #     expand_pos_embed = self.pos_embed.expand(B, -1, -1).type_as(x).to(x.device).clone().detach()
-   #     pos_emd_vis = expand_pos_embed[~mask].reshape(B, -1, C)
-   #     pos_emd_mask = expand_pos_embed[mask].reshape(B, -1, C)
-   #     x_full = torch.cat([x_vis + pos_emd_vis, self.mask_token + pos_emd_mask], dim=1)  # [B, N, C_d]
-   #     x = self.decoder(x_full, pos_emd_mask.shape[1])  # [B, N_mask, 3 * 16 * 16]
-
-    #    return x
+        latent, mask, ids_restore = self.forwardEncoder(imgs, mask_ratio)
+        pred = self.forwardDecoder(latent, ids_restore)  # [N, L, p*p*3]
+        loss = self.forward_loss(imgs, pred, mask)
+        return loss, pred,mask
 
 
 
-    def forwardEncoder(self, img):
+    def forwardEncoder(self, img,  mask_ratio):
         # patch embedding
 
         #encoder
-
-        #_, _, T, _, _ = x.shape
-        #x = self.patch_embed(x)
         x = self.to_patch_embedding(img)
-        # B, number of tokens, latent dim (shape)
-        #B, _, C = x.shape
+
         b, n, _ = x.shape
 
         x = x + self.pos_embedding[:, 1:, :]
         # masking: length -> length * mask_ratio
-        #x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        x, mask, ids_restore = self.random_masking(x, mask_ratio)
 
         # append cls token
-
-        #cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)
-
+        #cls_token = self.cls_token + self.pos_embedding[:, :1, :]
+        #cls_tokens = cls_token.expand(x.shape[0], -1, -1)
         #x = torch.cat((cls_tokens, x), dim=1)
+        cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)
+
+        x = torch.cat((cls_tokens, x), dim=1)
 
 
-        #x = self.dropout(x)
+        x = self.dropout(x)
 
         x = self.transformer(x)
 
         x = self.norm(x)
-        return x
+        return x, mask, ids_restore
     #CR
-    def forwardDecoder(self, x):
+    def forwardDecoder(self, x, ids_restore):
         #now do forward on decoder part. first get decoder embeddings from tranformer output
         #decoder
         x = self.decoder_embed(x)
 
         # append mask tokens to sequence
-        #mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
-        #x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
-        #x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
-        #x = torch.cat([x[:, :1, :], x], dim=1)  # append cls token
+        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
+        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
+        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
 
         # add pos embed
         x = x + self.decoder_pos_embed
@@ -314,28 +248,25 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         x= self.decoder_pred(x)
 
         # remove cls token
-        #x = x[:, 1:, :]
+        x = x[:, 1:, :]
 
         return x
 
-    def forward_loss(self, imgs, pred):
+    def forward_loss(self, imgs, pred, mask):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
         mask: [N, L], 0 is keep, 1 is remove,
         """
         target = self.patchify(imgs)
-        N = imgs[0]
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
             target = (target - mean) / (var + 1.e-6) ** .5
 
         loss = (pred - target) ** 2
-        loss = loss.mean(dim=-1)
-        # [N, L], mean loss per patch
-        #loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-        loss = loss.sum()
+        loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
     def unpatchify(self, x):
@@ -343,15 +274,13 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         x: (N, L, patch_size**2 *3)
         imgs: (N, 3, H, W)
         """
-        #(1, 3, 10, 32, 32)
         p = self.patch_size
-        #h = w = int(x.shape[1] ** .5)
-        #assert h * w == x.shape[1]
+        h = w = int(x.shape[1] ** .5)
+        assert h * w == x.shape[1]
 
-        d = self.frames_depth
-        #x = x.reshape(shape=(x.shape[0], h, w, p, p, 3, d))
-        #x = torch.einsum('nhwpdqc->nchpdwq', x)
-        imgs = x.reshape(shape=(x.shape[0], self.numChannels, self.frames_depth, self.image_height, self.image_width))
+        x = x.reshape(shape=(x.shape[0], h, w, p, p, 3))
+        x = torch.einsum('nhwpqc->nchpwq', x)
+        imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
         return imgs
 
     def random_masking(self, x, mask_ratio):
@@ -382,42 +311,14 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         return x_masked, mask, ids_restore
     def patchify(self, imgs):
         """
-        1 320 96
-        imgs: (B, C, T, H, W)
-        x: (B, L, patch_size**2 *3)
+        imgs: (N, 3, H, W)
+        x: (N, L, patch_size**2 *3)
         """
         p = self.patch_size
-        assert imgs.shape[3] == imgs.shape[4] and imgs.shape[3] % p == 0
-        d=imgs.shape[2] # frames depth we are conisdering tube as one unit from where we want to extract tokens.
+        assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
 
-        h = w = imgs.shape[3] // p
-        frames = int  (self.frames_depth /self.tubelet_size )
-        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p, d))
-        x = torch.einsum('nchpdwq->nhwpdqc', x)
-
-        x = x.reshape(shape=(imgs.shape[0], h * w * frames, p**2 * 3 * self.tubelet_size ))
-        return x
-
-class PatchEmbed(nn.Module):
-    """ Image to  Patch Embedding
-    """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, num_frames=16, tubelet_size=2):
-        super().__init__()
-        img_size = pair(img_size)
-        patch_size = pair(patch_size)
-        self.tubelet_size = int(tubelet_size)
-        num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0]) * (num_frames // self.tubelet_size)
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.num_patches = num_patches
-        self.proj = nn.Conv3d(in_channels=in_chans, out_channels=embed_dim,
-                            kernel_size = (self.tubelet_size,  patch_size[0],patch_size[1]),
-                            stride=(self.tubelet_size,  patch_size[0],  patch_size[1]))
-
-    def forward(self, x, **kwargs):
-        B, C, T, H, W = x.shape
-        # FIXME look at relaxing size constraints
-        assert H == self.img_size[0] and W == self.img_size[1], \
-            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x).flatten(2).transpose(1, 2)
+        h = w = imgs.shape[2] // p
+        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
+        x = torch.einsum('nchpwq->nhwpqc', x)
+        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))
         return x

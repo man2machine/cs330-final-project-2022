@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from  smallvitt.models.vitMaskedAutoEncoder import  ViTMaskedAutoEncoder
+from  vitmaindriver.smallvitmeta.models.vitMaskedAutoEncoder import  ViTMaskedAutoEncoder
 def test_AutoEncoder():
     img_size=32
     patch_size=4

@@ -1,6 +1,6 @@
 import torch
 from torch import nn, einsum
-from smallvitt.utils.drop_path import DropPath
+from vitmaindriver.smallvitmeta.utils.drop_path import DropPath
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from .SPT import ShiftedPatchTokenization
@@ -55,52 +55,7 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-#Attenstion Space Time  (dim, num_patches, heads=heads, dim_head=dim_head, dropout=dropout, is_LSA=is_LSA)
-class AttentionST(nn.Module):
-    def __init__(
-            self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.,
-            proj_drop=0., num_patches=320, dropout= 0.5, dim_head=None):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        if dim_head is not None:
-            head_dim = dim_head
-        all_head_dim = head_dim * self.num_heads
-        self.scale = qk_scale or head_dim ** -0.5
 
-        self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
-        if qkv_bias:
-            self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-            self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
-        else:
-            self.q_bias = None
-            self.v_bias = None
-
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(all_head_dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x):
-        B, N, C = x.shape
-        qkv_bias = None
-        if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-        qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
-
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
 
 
 class Attention(nn.Module):
@@ -189,7 +144,7 @@ class Transformer(nn.Module):
 
 class ViTMaskedVideoEncoder(nn.Module):
 
-    def __init__(self, *, img_size, patch_size, frames_depth, num_classes, dim, depth, heads,  mlp_dim_ratio, channels=3,
+    def __init__(self, *, img_size, patch_size, frames_depth, num_classes, dim, depth, heads,  mlp_dim_ratio, channels=3, masking=False,
                  dim_head=16, dropout=0., emb_dropout=0., stochastic_depth=0., tubelet_size=2, is_LSA=False, is_SPT=False,norm_pix_loss=False, in_chans=3):
 
         super().__init__()
@@ -204,6 +159,7 @@ class ViTMaskedVideoEncoder(nn.Module):
         self.frames_depth = frames_depth
         self.tubelet_size= tubelet_size
         self.numChannels = in_chans
+        self.cls_token = nn.Parameter(torch.randn(1, 1, self.dim))
 
         self.to_patch_embedding = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=dim, tubelet_size=tubelet_size)
@@ -220,8 +176,36 @@ class ViTMaskedVideoEncoder(nn.Module):
 
         self.apply(init_weights)
 
+    def random_masking(self, x, mask_ratio):
+        """
+        Perform per-sample random masking by per-sample shuffling.
+        Per-sample shuffling is done by argsort random noise.
+        x: [N, L, D], sequence
+        """
+        N, L, D = x.shape  # batch, length, dim
+        len_keep = int(L * (1 - mask_ratio))
 
-    def forward(self, img):
+        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        # unshuffle to get the binary mask
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
+
+
+
+    def forward(self, img, mask_ratio=0.75):
         # patch embedding
 
         #encoder
@@ -235,13 +219,13 @@ class ViTMaskedVideoEncoder(nn.Module):
 
         x = x + self.pos_embedding[:, 1:, :]
         # masking: length -> length * mask_ratio
-        #x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        x, mask, ids_restore = self.random_masking(x, mask_ratio)
 
         # append cls token
 
-        #cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)
+        cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)
 
-        #x = torch.cat((cls_tokens, x), dim=1)
+        x = torch.cat((cls_tokens, x), dim=1)
 
 
         x = self.dropout(x)
