@@ -35,9 +35,9 @@ MODELS = ['vitMaskedVideoAutoEncoder', 'vitMaskedVideoEncoderWithHead', 'vitMask
 
 def init_parser():
     parser = argparse.ArgumentParser(description='TinyVirat Dataset')
-    # parser.add_argument('--model', default='vit', type=str, help='model vit')
-    # Data args
-    #parser.add_argument('--data_path', default='./TinyVIRAT', type=str, help='dataset path')
+
+    parser.add_argument('--expname', default='customdataset', type=str,
+                        help='Image Net dataset path')
 
     parser.add_argument('--dataset', default='TinyVIRAT', choices=['TinyVIRAT'], type=str,
                         help='Image Net dataset path')
@@ -223,6 +223,7 @@ def main(args):
     #override image size with numofclasses we got from
 
     data_info['n_classes'] = len(classToLabelValid)
+    data_info['img_size']=64
     model = create_model(data_info['img_size'], data_info['n_classes'], args)
     patch_size = model.patch_dim
     model.to(DEVICE)
@@ -462,8 +463,8 @@ if __name__ == '__main__':
 
     if args.is_LSA:
         model_name += "-LSA"
-
-    model_name += f"-{args.tag}-{args.dataset}-LR[{args.lr}]-Seed{args.seed}"
+    expname = "customdataset-classificationHead_" + str(args.input_size) + model_name
+    model_name += f"-{expname}-LR[{args.lr}]-Seed{args.seed}"
     save_path = os.path.join(os.getcwd(), 'save', model_name)
     if save_path:
         os.makedirs(save_path, exist_ok=True)
