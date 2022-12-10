@@ -352,6 +352,11 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
              target = target.to(torch.int64)
              target = target[:, 0] #for all N patches we just need one label for vidoes
              loss = criterion(output, target)
+             acc = accuracy(output, target, (1,))
+             acc1 = acc[0]
+             n += images.size(0)
+             loss_val += float(loss.item() * images.size(0))
+             acc1_val += float(acc1[0] * images.size(0))
 
         n += images.size(0)
         loss_val += float(loss.item() * images.size(0))
@@ -367,6 +372,11 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
             avg_loss= (loss_val / n)
             progress_bar(i, len(train_loader),
                          f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Loss: {avg_loss:.4e}   LR: {lr:.7f}' + ' ' * 10)
+
+        if args.print_freq >= 0 and i % args.print_freq == 0:
+            avg_acc1 =  acc1_val /n
+            progress_bar(i, len(train_loader),
+                         f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Top-1: {avg_acc1:6.2f}   LR: {lr:.7f}' + ' ' * 10)
 
     logger_dict.update(keys[0], avg_loss)
     writer.add_scalar("Loss/train", avg_loss, epoch)
@@ -396,25 +406,31 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
                 target = target.to(torch.int64)
                 target = target[:, 0]  # for all N patches we just need one label for vidoes
                 loss = criterion(output, target)
-            #acc = accuracy(output, target, (1, 5))
-            #acc1 = acc[0]
+            acc = accuracy(output, target, (1, 5))
+            acc1 = acc[0]
             n += images.size(0)
             loss_val += float(loss.item() * images.size(0))
-            #acc1_val += float(acc1[0] * images.size(0))
+            acc1_val += float(acc1[0] * images.size(0))
 
             if args.print_freq >= 0 and i % args.print_freq == 0:
                 avg_loss = (loss_val / n)
                 progress_bar(i, len(val_loader),
                              f'[Epoch {epoch + 1}][V][{i}]   Loss: {avg_loss:.4e}    LR: {lr:.6f}')
+
+            if args.print_freq >= 0 and i % args.print_freq == 0:
+                avg_acc1 = acc1_val / n
+                progress_bar(i, len(val_loader),
+                             f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Top 5: {avg_acc1:6.2f}   LR: {lr:.7f}' + ' ' * 10)
+
     print()
 
     print(Fore.BLUE)
     print('*' * 80)
 
     logger_dict.update(keys[2], avg_loss)
-
-
+    logger_dict.update(keys[3], avg_acc1)
     writer.add_scalar("Loss/val", avg_loss, epoch)
+    writer.add_scalar("Acc/val", avg_acc1, epoch)
 
 
     return avg_loss
