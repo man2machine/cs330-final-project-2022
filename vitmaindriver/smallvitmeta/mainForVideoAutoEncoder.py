@@ -30,7 +30,7 @@ from utils.scheduler import build_scheduler
 warnings.filterwarnings("ignore", category=Warning)
 
 best_acc1 = 0
-MODELS = ['vitMaskedVideoAutoEncoder', 'vitMaskedVideoEncoderWithHead', 'vitMaskedVideoEncoderWithMetaHead' ]
+MODELS = ['vitMaskedVideoAutoEncoder', 'vitMaskedVideoEncoderWithHead', 'vitMaskedVideoEncoderWithMetaHead', '' ]
 
 
 def init_parser():
@@ -163,11 +163,11 @@ print(DEVICE)
 
 import sys
 #"compositeDataset/train/"
-def build_pretraining_dataset(args, videoPath, classToLabelMap=None):
+def build_pretraining_dataset(args, videoPath, jsonPath, classToLabelMap=None):
     transform = DataAugmentationForVideoMAE(args)
     dataset = VideoMAE(
         root=videoPath,
-        setting=args.data_path,
+        setting=jsonPath,
         video_ext='mp4',
         is_color=True,
         modality='rgb',
@@ -214,8 +214,8 @@ def main(args):
     args.patch_size = patch_size
 
     # get dataset
-    train_dataset,classToLabelTrain = build_pretraining_dataset(args, "compositeDataset/train/")
-    val_dataset,classToLabelValid = build_pretraining_dataset(args, "compositeDataset/test/", classToLabelTrain)
+    train_dataset,classToLabelTrain = build_pretraining_dataset(args, "TinyVIRAT/train/", "TinyVIRAT/tiny_train.json")
+    val_dataset,classToLabelValid = build_pretraining_dataset(args, "TinyVIRAT/test/", "TinyVIRAT/tiny_test.json", classToLabelTrain)
 
     labelValidation(classToLabelTrain, classToLabelValid)
 
@@ -335,7 +335,7 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
     model.train()
     loss_val, acc1_val = 0, 0
     n = 0
-
+    autoencoder=False
     for i, (images, target) in enumerate(train_loader):
         if (not args.no_cuda) and torch.cuda.is_available():
             images = images.cuda(args.gpu, non_blocking=True)
@@ -344,10 +344,11 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
         if args.model == 'vitautoencoder':
             loss, output  = model(images)
         elif args.model == 'vitmaskedautoencoder':
+            autoencoder=True
             loss, output, mask = model(images)
         elif args.model == 'vitmaskedvideoautoencoder':
             loss, output  = model(images)
-
+            autoencoder=True
         elif args.model == 'vitmaskedvideoencoderwithhead':
              output  = model(images)
              target = target.to(torch.int64)
@@ -374,14 +375,16 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
             progress_bar(i, len(train_loader),
                          f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Loss: {avg_loss:.4e}   LR: {lr:.7f}' + ' ' * 10)
 
-        if args.print_freq >= 0 and i % args.print_freq == 0:
-            avg_acc1 =  acc1_val /n
-            progress_bar(i, len(train_loader),
-                         f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Top-1: {avg_acc1:6.2f}   LR: {lr:.7f}' + ' ' * 10)
+        if not autoencoder:
+            if args.print_freq >= 0 and i % args.print_freq == 0:
+                avg_acc1 =  acc1_val /n
+                progress_bar(i, len(train_loader),
+                            f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Top-1: {avg_acc1:6.2f}   LR: {lr:.7f}' + ' ' * 10)
 
     logger_dict.update(keys[0], avg_loss)
+    logger_dict.update(keys[1], avg_acc1)
     writer.add_scalar("Loss/train", avg_loss, epoch)
-
+    writer.add_scalar("Acc/val", avg_acc1, epoch)
     return lr
 
 
@@ -389,6 +392,7 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
     model.eval()
     loss_val, acc1_val = 0, 0
     n = 0
+    autoencoder=False
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             if (not args.no_cuda) and torch.cuda.is_available():
@@ -399,29 +403,33 @@ def validate(val_loader, model, criterion, lr, args, epoch=None):
                 loss, output = model(images)
             elif args.model == 'vitmaskedautoencoder':
                 loss, output, mask = model(images)
+                autoencoder=True
             #loss = criterion(output, target)
             elif args.model == 'vitmaskedvideoautoencoder':
                 loss, output = model(images)
+                autoencoder=True
             elif args.model == 'vitmaskedvideoencoderwithhead':
                 output = model(images)
                 target = target.to(torch.int64)
                 target = target[:, 0]  # for all N patches we just need one label for vidoes
                 loss = criterion(output, target)
-            acc = accuracy(output, target, (1, 5))
-            acc1 = acc[0]
+                acc = accuracy(output, target, (1, 5))
+                acc1 = acc[0]
+                acc1_val += float(acc1[0] * images.size(0))
             n += images.size(0)
             loss_val += float(loss.item() * images.size(0))
-            acc1_val += float(acc1[0] * images.size(0))
+
 
             if args.print_freq >= 0 and i % args.print_freq == 0:
                 avg_loss = (loss_val / n)
                 progress_bar(i, len(val_loader),
                              f'[Epoch {epoch + 1}][V][{i}]   Loss: {avg_loss:.4e}    LR: {lr:.6f}')
 
-            if args.print_freq >= 0 and i % args.print_freq == 0:
-                avg_acc1 = acc1_val / n
-                progress_bar(i, len(val_loader),
-                             f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Top 5: {avg_acc1:6.2f}   LR: {lr:.7f}' + ' ' * 10)
+            if not autoencoder:
+                if args.print_freq >= 0 and i % args.print_freq == 0:
+                    avg_acc1 = acc1_val / n
+                    progress_bar(i, len(val_loader),
+                                f'[Epoch {epoch + 1}/{args.epochs}][T][{i}]   Top 5: {avg_acc1:6.2f}   LR: {lr:.7f}' + ' ' * 10)
 
     print()
 
@@ -463,7 +471,7 @@ if __name__ == '__main__':
 
     if args.is_LSA:
         model_name += "-LSA"
-    expname = "customdataset-classificationHead_" + str(args.input_size) + model_name
+    expname = "customdataset-classificationHead_" + str(args.input_size) + model_name + "num_of_classes-376 "
     model_name += f"-{expname}-LR[{args.lr}]-Seed{args.seed}"
     save_path = os.path.join(os.getcwd(), 'save', model_name)
     if save_path:
