@@ -6,46 +6,40 @@ Created on Sat May  8 15:05:40 2021
 Modified from: https://github.com/MCG-NJU/VideoMAE
 """
 
-import os
-import math
-from functools import partial
-
 import numpy as np
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-import torchvision
-from torchvision import transforms
 import torchvision.transforms.functional as TF
 
-from cs330_project.augmentation import (
-    GroupNormalize,
+from cs330_project.datasets.video_augmentation import (
     GroupMultiScaleCrop,
-    Stack
+    GroupRandomCrop,
+    GroupCenterCrop
 )
 
 
 class VideoDatasetType:
-    TEMP = "temp"
+    TINY_VIRAT = "tiny_virat"
 
 
 DATASET_TO_NUM_CLASSES = {
-    VideoDatasetType.TEMP: 10
+    VideoDatasetType.TINY_VIRAT: 10
 }
 
 IMG_DATASET_TO_IMG_SIZE = {
-    VideoDatasetType.TEMP: 32
+    VideoDatasetType.TINY_VIRAT: 32
 }
 
 
 class RawDataset(Dataset):
-    def __init__(self,
-                 x_data,
-                 y_data=None,
-                 metadata=None):
+    def __init__(
+            self,
+            x_data,
+            y_data=None,
+            metadata=None):
+
         self.labeled = y_data is not None
         self.x_data = x_data
         self.y_data = y_data
@@ -62,10 +56,12 @@ class RawDataset(Dataset):
 
 
 class TransformDataset(Dataset):
-    def __init__(self,
-                 dataset,
-                 labeled=True,
-                 transform_func=None):
+    def __init__(
+            self,
+            dataset,
+            labeled=True,
+            transform_func=None):
+
         self.dataset = dataset
         self.transform_func = transform_func
         self.labeled = labeled
@@ -85,61 +81,100 @@ class TransformDataset(Dataset):
         return len(self.dataset)
 
 
-class MaskingGenerator:
-    def __init__(self, input_size, mask_ratio):
-        self.num_frames, self.height, self.width = input_size
-        self.num_patches_per_frame = self.height * self.width
-        self.num_masked_patches_per_frame = int(
-            mask_ratio * self.num_patches_per_frame)
-        self.num_visible_patches_per_frame = self.num_patches_per_frame - \
-            self.num_masked_patches_per_frame
-        self.total_masks = self.num_frames * self.num_masked_patches_per_frame
+class MaskGenerator:
+    def __init__(
+            self,
+            *,
+            num_patches,
+            mask_ratio):
+
+        self.num_patches = num_patches
+        self.num_masked_patches = int(
+            mask_ratio * self.num_patches)
+        self.num_visible_patches = self.num_patches - \
+            self.num_masked_patches
+
         self.rng = np.random.default_rng()
 
     def __call__(self):
-        shuffle_indices = np.arange(self.num_patches_per_frame)
-        self.rng.shuffle(mask_per_frame)
+        shuffle_indices = np.arange(self.num_patches)
+        self.rng.shuffle(shuffle_indices)
         unshuffle_indices = np.argsort(shuffle_indices)
 
-        masked_indices = \
-            shuffle_indices[:, :self.num_visible_patches_per_frame]
+        masked_indices = shuffle_indices[:self.num_visible_patches]
 
-        mask_per_frame = np.ones([self.num_patches_per_frame])
-        mask_per_frame[:, :self.num_visible_patches_per_frame] = 0
-        mask_per_frame = np.take(
-            mask_per_frame, unshuffle_indices, axis=0)  # [h * w]
-        mask = np.tile(
-            mask_per_frame, (self.num_frames, 1)).flatten()  # [h * w * t, 1]
+        mask = np.ones([self.num_patches])
+        mask[:self.num_visible_patches] = 0
+        mask = np.take(mask, unshuffle_indices, axis=0)
+        
+        mask = mask.astype(np.bool)
+        shuffle_indices = shuffle_indices.astype(np.int64)
+        unshuffle_indices = unshuffle_indices.astype(np.int64)
+        masked_indices = masked_indices.astype(np.int64)
 
         return mask, shuffle_indices, unshuffle_indices, masked_indices
 
 
-class MaskedVideoAutoencoderTransform:
-    def __init__(self, input_size, mask_window_size=1, tube_masking=False, mask_ratio=0.75):
+class VideoAugmentTransform:
+    CROP_TYPE_MULTI_SCALE = 0
+    CROP_TYPE_RANDOM = 1
+    CROP_TYPE_CENTER = 2
+    
+    def __init__(
+            self,
+            input_size,
+            crop_type=0):
+
         self.input_mean = [0.485, 0.456, 0.406]  # ImageNet default mean
         self.input_std = [0.229, 0.224, 0.225]  # ImageNet default std
-        self.augment = transforms.Compose([
-            GroupMultiScaleCrop(
-                input_size,
-                [1, 0.875, 0.75, 0.66]),
-            Stack(),
-            transforms.ToTensor(),
-            GroupNormalize(self.input_mean, self.input_std),
-        ])
-        if tube_masking:
-            self.masked_position_generator = MaskingGenerator(
-                mask_window_size, mask_ratio)
+        crop_transform = {
+            self.CROP_TYPE_MULTI_SCALE: GroupMultiScaleCrop,
+            self.CROP_TYPE_RANDOM: GroupRandomCrop,
+            self.CROP_TYPE_CENTER: GroupCenterCrop
+        }[crop_type]
+        self.resize = crop_transform(input_size)
 
-    def __call__(self, images):
-        images, labels = self.augment(images)
-        return images, self.masked_position_generator()
+    def __call__(self, images_per_frame):
+        images_per_frame = self.resize(images_per_frame)  # PIL Image, t
+        images_per_frame = np.stack(images_per_frame, axis=0)  # t, h, w, c
+        images_per_frame = [TF.to_tensor(image) for image in images_per_frame] # t, c, h, w
+        for image in images_per_frame:
+            TF.normalize(image, self.input_mean, self.input_std, inplace=True)
+        images_per_frame = torch.stack(images_per_frame, dim=0)
+        images_per_frame = images_per_frame.permute((1, 0, 2, 3))  # c, t, h, w
+
+        return images_per_frame
 
 
-def get_dataloaders(datasets,
-                    train_batch_size,
-                    test_batch_size,
-                    num_workers=4,
-                    pin_memory=False):
+class MaskedVideoAutoencoderTransform:
+    def __init__(
+        self,
+        *,
+        input_size,
+        num_patches,
+        mask_ratio=0.75,
+        crop_type=0):
+        
+        self.augment = VideoAugmentTransform(
+            input_size=input_size,
+            crop_type=crop_type)
+        self.mask_generator = MaskGenerator(
+            num_patches=num_patches,
+            mask_ratio=mask_ratio)
+
+    def __call__(self, images_per_frame):
+        images_per_frame = self.augment(images_per_frame)
+        mask_info = self.mask_generator()
+        
+        return images_per_frame, mask_info
+
+
+def get_dataloaders(
+        datasets,
+        train_batch_size,
+        test_batch_size,
+        num_workers=4,
+        pin_memory=False):
     train_dataset = datasets['train']
     train_loader = DataLoader(train_dataset,
                               batch_size=train_batch_size,

@@ -75,3 +75,6 @@ def get_timestamp_str(include_seconds=True):
         return datetime.datetime.now().strftime("%m-%d-%Y %I-%M-%S %p")
     else:
         return datetime.datetime.now().strftime("%m-%d-%Y %I-%M %p")
+
+def make_pair_shape(t):
+    return t if isinstance(t, tuple) else (t, t)

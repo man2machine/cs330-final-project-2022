@@ -11,10 +11,9 @@ import pickle
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from cs330_project.utils import get_timestamp_str
 
@@ -136,7 +135,7 @@ def make_scheduler(
     return scheduler
 
 
-def train_one_epoch(
+def train_mae_single_epoch(
         model,
         criterion,
         dataloader,
@@ -145,37 +144,53 @@ def train_one_epoch(
         grad_accum_steps=1):
 
     model.train()
-
     optimizer.zero_grad()
 
-    for data_iter_step, (samples, targets) in enumerate(dataloader):
-        if len(samples.shape) == 6:
-            b, r, c, t, h, w = samples.shape
-            samples = samples.view(b * r, c, t, h, w)
-            targets = targets.view(b * r)
+    loss_record = []
+    running_loss = 0.0
+    running_count = 0
 
-        samples = samples.to(device)
-        targets = targets.to(device)
+    pbar = tqdm(dataloader)
+    for data_iter_step, (samples, labels) in enumerate(pbar):
+        visual_data, mask_info = samples
+        visual_data = visual_data.to(device)
+        mask_info = [n.to(device) for n in mask_info]
 
         with torch.set_grad_enabled(True):
-            outputs = model(samples)
-            latent, pred = outputs
-            loss = criterion(pred, targets)
+            outputs = model(visual_data, mask_info)
+            latent_patched, x_patched, x_hat_patched = outputs
+            loss = criterion(x_hat_patched, x_patched)
             loss /= grad_accum_steps
         loss.backward()
+        
+        current_loss = loss.detach().item()
+        num_samples = visual_data.size(0)
+        
+        running_loss += current_loss * num_samples
+        running_count += num_samples
+        
+        avg_loss = running_loss / running_count
+        
+        loss_record.append(current_loss)
+
+        desc = "Avg. Loss: {:.4f}, Current Loss: {:.4f}"
+        desc = desc.format(avg_loss, current_loss)
+        pbar.set_description(desc)
 
         if (data_iter_step + 1) % grad_accum_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
-        
+
         if device.type == 'cuda':
             torch.cuda.synchronize()
 
+    return loss_record, avg_loss
 
-def train_model(
+
+def train_mae_model(
         device,
         model,
-        dataloaders,
+        dataloader,
         criterion,
         optimizer,
         save_dir,
@@ -199,23 +214,16 @@ def train_model(
         train_loss_info = {}
 
         print("Training")
-        
-        train_one_epoch(
+
+        train_loss_record, training_loss = train_mae_single_epoch(
             model,
             criterion,
-            dataloaders['train'],
+            dataloader,
             optimizer,
             device)
 
         print("Training Loss: {:.4f}".format(training_loss))
-        print("Training Accuracy: {:.4f}".format(training_acc))
         train_loss_info["loss"] = train_loss_record
-
-        print("Testing")
-        # TODO
-        
-        print("Testing loss: {:.4f}".format(test_loss))
-        print("Testing accuracy: {:.4f}".format(test_accuracy))
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -225,7 +233,7 @@ def train_model(
             tracker.update_model_weights(
                 epoch,
                 model_weights,
-                metric=test_accuracy,
+                metric=training_loss,
                 save_best=save_best,
                 save_latest=save_latest,
                 save_current=save_all
@@ -241,11 +249,191 @@ def train_model(
         print()
 
     time_elapsed = time.time() - start_time
-    print(
-        "Training complete in {:.0f}m {:.0f}s".format(
-            time_elapsed // 60, time_elapsed % 60
-        )
-    )
+    print("Training complete in {:.0f}m {:.0f}s".format(
+        time_elapsed // 60, time_elapsed % 60))
+
+    return tracker
+
+
+def train_classifier_single_epoch(
+        model,
+        criterion,
+        dataloader,
+        optimizer,
+        device,
+        grad_accum_steps=1):
+
+    model.train()
+    optimizer.zero_grad()
+
+    loss_record = []
+    running_loss = 0.0
+    running_correct = 0
+    running_count = 0
+
+    pbar = tqdm(dataloader)
+    for data_iter_step, (samples, labels) in enumerate(pbar):
+        visual_data, mask_info = samples
+        visual_data = visual_data.to(device)
+
+        with torch.set_grad_enabled(True):
+            outputs = model(visual_data)
+            _, preds = torch.max(outputs, dim=1)
+            loss = criterion(outputs, labels)
+            loss /= grad_accum_steps
+        loss.backward()
+        
+        correct = torch.sum(preds == labels).item()
+        current_loss = loss.detach().item()
+        num_samples = visual_data.size(0)
+        
+        running_correct += correct
+        running_loss += current_loss * num_samples
+        running_count += num_samples
+        
+        avg_loss = running_loss / running_count
+        avg_acc = running_correct / running_count
+        
+        loss_record.append(current_loss)
+        
+        if (data_iter_step + 1) % grad_accum_steps == 0:
+            desc = "Avg. Loss: {:.4f}, Current Loss: {:.4f}, Acc: {:4f}"
+            desc = desc.format(avg_loss, current_loss, avg_acc)
+            pbar.set_description(desc)
+
+            optimizer.step()
+            optimizer.zero_grad()
+
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+
+    return loss_record, avg_loss, avg_acc
+
+
+def test_classifier_single_epoch(
+        model,
+        criterion,
+        dataloader,
+        device):
+
+    model.eval()
+    
+    running_loss = 0.0
+    running_correct = 0
+    running_count = 0
+
+    pbar = tqdm(dataloader)
+    for data_iter_step, (samples, labels) in enumerate(pbar):
+        visual_data, mask_info = samples
+        visual_data = visual_data.to(device)
+
+        with torch.set_grad_enabled(False):
+            outputs = model(visual_data)
+            _, preds = torch.max(outputs, dim=1)
+            loss = criterion(outputs, labels)
+        
+        correct = torch.sum(preds == labels).item()
+        current_loss = loss.detach().item()
+        num_samples = visual_data.size(0)
+        
+        running_correct += correct
+        running_loss += current_loss * num_samples
+        running_count += num_samples
+        
+        avg_loss = running_loss / running_count
+        avg_acc = running_correct / running_count
+
+        desc = "Avg. Loss: {:.4f}, Current Loss: {:.4f}, Acc: {:4f}"
+        desc = desc.format(avg_loss, current_loss, avg_acc)
+        pbar.set_description(desc)
+
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+
+    return avg_loss, avg_acc
+
+
+def train_classifier_model(
+        device,
+        model,
+        dataloader_train,
+        dataloader_test,
+        criterion,
+        optimizer,
+        save_dir,
+        lr_scheduler=None,
+        save_model=False,
+        save_best=False,
+        save_latest=False,
+        save_all=False,
+        save_log=False,
+        num_epochs=1):
+
+    start_time = time.time()
+
+    tracker = ModelTracker(save_dir)
+
+    for epoch in range(num_epochs):
+        print("-" * 10)
+        print("Epoch {}/{}".format(epoch + 1, num_epochs))
+        print("-" * 10)
+
+        train_info = {}
+        test_info = {}
+
+        print("Training")
+
+        train_loss_record, training_loss, training_acc = train_classifier_single_epoch(
+            model,
+            criterion,
+            dataloader_train,
+            optimizer,
+            device)
+
+        print("Training Loss: {:.4f}".format(training_loss))
+        train_info["loss_record"] = train_loss_record
+        train_info["loss_avg"] = training_loss
+        train_info["acc_avg"] = training_acc
+        
+        print("Testing")
+
+        testing_loss, testing_acc = test_classifier_single_epoch(
+            model,
+            criterion,
+            dataloader_test,
+            optimizer,
+            device)
+
+        print("Testing Loss: {:.4f}, Testing Acc.: {:.4f}".format(testing_loss, testing_acc))
+        test_info["loss_avg"] = testing_loss
+        test_info["acc_avg"] = testing_acc
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        if save_model:
+            model_weights = model.state_dict()
+            tracker.update_model_weights(
+                epoch,
+                model_weights,
+                metric=training_loss,
+                save_best=save_best,
+                save_latest=save_latest,
+                save_current=save_all
+            )
+
+        if save_log:
+            info = {"train_loss_history": train_info}
+            tracker.update_info_history(epoch, info)
+
+        if lr_scheduler:
+            lr_scheduler.step()
+
+        print()
+
+    time_elapsed = time.time() - start_time
+    print("Training complete in {:.0f}m {:.0f}s".format(
+        time_elapsed // 60, time_elapsed % 60))
 
     return tracker
 
