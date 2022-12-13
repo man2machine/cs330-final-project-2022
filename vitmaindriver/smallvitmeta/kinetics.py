@@ -1,3 +1,6 @@
+# based on https://github.com/MCG-NJU/VideoMAE
+#@author:  Faraz, Shahir, Pratyush
+
 import os
 import numpy as np
 from numpy.lib.function_base import disp

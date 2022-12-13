@@ -1,4 +1,6 @@
 #from utils.mix import cutmix_data, mixup_data, mixup_criterion
+#@author:  Faraz, Shahir, Pratyush
+#Modified from: https://github.com/aanna0701/SPT_LSA_ViT
 import numpy as np
 import random
 import logging as log
@@ -215,15 +217,17 @@ def main(args):
 
     # get dataset
     train_dataset,classToLabelTrain = build_pretraining_dataset(args, "TinyVIRAT/train/", "TinyVIRAT/tiny_train.json")
+    # we are creating labels on fly so we want to make sire that they matches in test and validation datasets
+    #we have customization in dataloading logistics
     val_dataset,classToLabelValid = build_pretraining_dataset(args, "TinyVIRAT/test/", "TinyVIRAT/tiny_test.json", classToLabelTrain)
 
+    #we are creating labels on fly so we want to make sire that they matches in test and validation datasets
     labelValidation(classToLabelTrain, classToLabelValid)
-
 
     #override image size with numofclasses we got from
 
     data_info['n_classes'] = len(classToLabelValid)
-    data_info['img_size']=64
+    data_info['img_size']=32
     model = create_model(data_info['img_size'], data_info['n_classes'], args)
     patch_size = model.patch_dim
     model.to(DEVICE)
@@ -340,7 +344,9 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
         if (not args.no_cuda) and torch.cuda.is_available():
             images = images.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
-
+        #models we support are 2d videoautoencoer (with decoder added as per our contribution).
+        #we support masked video autoencoder, masked video encoder with head and meta video encoder which is
+        #tested by unit test but meta training support still needed to be added in video reading pipeline.
         if args.model == 'vitautoencoder':
             loss, output  = model(images)
         elif args.model == 'vitmaskedautoencoder':
@@ -352,7 +358,7 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
         elif args.model == 'vitmaskedvideoencoderwithhead':
              output  = model(images)
              target = target.to(torch.int64)
-             target = target[:, 0] #for all N patches we just need one label for vidoes
+             target = target[:, 0] #for all N patches we just need one patch for vidoes labeling
              loss = criterion(output, target)
              acc = accuracy(output, target, (1,))
              acc1 = acc[0]
@@ -471,7 +477,7 @@ if __name__ == '__main__':
 
     if args.is_LSA:
         model_name += "-LSA"
-    expname = "customdataset-classificationHead_" + str(args.input_size) + model_name + "num_of_classes-376 "
+    expname = "customdataset-classificationHead_" + str(args.input_size) + model_name + "num_of_classes-26 "
     model_name += f"-{expname}-LR[{args.lr}]-Seed{args.seed}"
     save_path = os.path.join(os.getcwd(), 'save', model_name)
     if save_path:

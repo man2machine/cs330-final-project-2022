@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# based on https://github.com/MCG-NJU/VideoMAE
+#@author:  Faraz, Shahir, Pratyush
+
 import math
 import numpy as np
 import random

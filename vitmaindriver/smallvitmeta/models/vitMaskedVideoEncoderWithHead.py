@@ -1,11 +1,13 @@
+# based onhttps://github.com/aanna0701/SPT_LSA_ViT
+#@author:  Faraz, Shahir, Pratyush
 import torch
 from torch import nn, einsum
 from vitmaindriver.smallvitmeta.utils.drop_path import DropPath
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from .SPT import ShiftedPatchTokenization
-from  .SPT3d import ShiftedPatchEmbed3d
-import torch.nn.functional as F
+
+
 
 
 # helpers
@@ -161,16 +163,9 @@ class ViTMaskedVideoEncoderWithHead(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, self.dim))
 
         is_SPT=True
-        if is_SPT:
 
-            self.to_patch_embedding = ShiftedPatchEmbed3d(
-                    in_channels=channels,
-                    shift_size=patch_size,
-                    tubelet_size=tubelet_size,
-                    embed_dim=self.dim)
-        else:
-            self.to_patch_embedding = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=dim, tubelet_size=tubelet_size)
+        self.to_patch_embedding = PatchEmbed(
+        img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=dim, tubelet_size=tubelet_size)
 
         self.pos_embedding =  nn.Parameter(torch.zeros(1, self.num_patches + 1, self.dim), requires_grad=False)
 

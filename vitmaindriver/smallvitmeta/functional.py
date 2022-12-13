@@ -1,3 +1,6 @@
+# based on https://github.com/MCG-NJU/VideoMAE
+#@author:  Faraz, Shahir, Pratyush
+
 import numbers
 import cv2
 import numpy as np

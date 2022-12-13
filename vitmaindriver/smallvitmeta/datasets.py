@@ -1,3 +1,5 @@
+# based on https://github.com/MCG-NJU/VideoMAE
+#@author:  Faraz, Shahir, Pratyush
 import os
 from torchvision import transforms
 from transforms import *

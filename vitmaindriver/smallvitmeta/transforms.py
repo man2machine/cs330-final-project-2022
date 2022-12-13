@@ -1,3 +1,5 @@
+# based on https://github.com/MCG-NJU/VideoMAE
+#@author:  Faraz, Shahir, Pratyush
 import torch
 import torchvision.transforms.functional as F
 import warnings

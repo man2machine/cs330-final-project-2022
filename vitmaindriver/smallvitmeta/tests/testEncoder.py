@@ -1,3 +1,5 @@
+#@author:  Faraz, Shahir, Pratyush
+#Modified from: https://github.com/aanna0701/SPT_LSA_ViT
 import torch
 import torch.nn as nn
 from smallvitt.models.vitEncoder import ViTEncoder

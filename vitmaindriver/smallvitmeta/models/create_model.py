@@ -1,3 +1,5 @@
+# based onhttps://github.com/aanna0701/SPT_LSA_ViT
+#@author:  Faraz, Shahir, Pratyush
 from models.vitMaskedVideoAutoEncoder import ViTMaskedVideoAutoEncoder
 from models.vitMaskedVideoEncoderWithHead import ViTMaskedVideoEncoderWithHead
 

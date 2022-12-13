@@ -1,9 +1,11 @@
+# based onhttps://github.com/aanna0701/SPT_LSA_ViT
+#@author:  Faraz, Shahir, Pratyush
 import torch
 from torch import nn
 from einops import rearrange
 from einops.layers.torch import Rearrange
 import math
-import torch.nn.functional as F
+#import torch.nn.functional as F
 
 class ShiftedPatchEmbed3d(nn.Module):
     def __init__(

@@ -1,3 +1,5 @@
+# based onhttps://github.com/aanna0701/SPT_LSA_ViT
+#@author:  Faraz, Shahir, Pratyush
 import torch
 from torch import nn, einsum
 from vitmaindriver.smallvitmeta.utils.drop_path import DropPath
@@ -204,7 +206,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
 
 
 
-    def forwardEncoder(self, img, mask_ratio=0.75):
+    def forwardEncoder(self, img, mask_ratio=0.8):
         # patch embedding
 
         #encoder
