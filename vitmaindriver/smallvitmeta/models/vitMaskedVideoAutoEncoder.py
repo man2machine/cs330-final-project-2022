@@ -210,7 +210,7 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         import numpy as np
         for count, latents in enumerate(latentsN):
             classNum = targetsN[count]
-            label = labelmap[classNum]
+            label = labelmap[classNum[0]] # this is 1-dim 1 elem array
 
             if not os.path.isdir("latentvectors" + "/" + label):
                 os.makedirs("latentvectors" + "/" + label)
