@@ -357,8 +357,8 @@ def train(train_loader, model, criterion, optimizer, epoch, scheduler, args):
             autoencoder=True
         elif args.model == 'vitmaskedvideoencoderwithhead':
              output  = model(images)
-             target = target.to(torch.int64)
-             target = target[:, 0] #for all N patches we just need one patch for vidoes labeling
+             target = target.to(torch.int64) #target is [B] dimension tensor containing indexes of output class
+             #target = target[:, 0] #for all N patches we just need one patch for vidoes labeling
              loss = criterion(output, target)
              acc = accuracy(output, target, (1,))
              acc1 = acc[0]
