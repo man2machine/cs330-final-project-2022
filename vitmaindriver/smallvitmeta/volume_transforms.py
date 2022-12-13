@@ -1,3 +1,6 @@
+# based on https://github.com/MCG-NJU/VideoMAE
+#@author:  Faraz, Shahir, Pratyush
+
 import numpy as np
 from PIL import Image
 import torch

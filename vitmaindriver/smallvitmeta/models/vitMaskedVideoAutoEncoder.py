@@ -1,3 +1,5 @@
+# based onhttps://github.com/aanna0701/SPT_LSA_ViT
+#@author:  Faraz, Shahir, Pratyush
 import torch
 from torch import nn, einsum
 from vitmaindriver.smallvitmeta.utils.drop_path import DropPath
@@ -200,11 +202,35 @@ class ViTMaskedVideoAutoEncoder(nn.Module):
         loss = self.forward_loss(imgs, pred)
         return loss, pred
 
+    def saveLatentVectorWithLabel(self, latents, targets, labelmap):
+        latentsN = torch.detach(latents).numpy()
+        targetsN = torch.detach(targets).numpy()
+        # latentvectors
+        import os
+        import numpy as np
+        for count, latents in enumerate(latentsN):
+            classNum = targetsN[count]
+            label = labelmap[classNum[0]] # this is 1-dim 1 elem array
 
+            if not os.path.isdir("latentvectors" + "/" + label):
+                os.makedirs("latentvectors" + "/" + label)
 
+            import random
+            x = random.randint(0, 50)
+            #print(x)
+            filename = "latentvectors" + "/" + label + "/" + str(x)
+            with open(filename, 'wb') as f:
+                np.save(f, latents)
 
+    def forwardWithLatentSaving(self, imgs, target, labelmap):
 
-    def forwardEncoder(self, img, mask_ratio=0.75):
+        latent = self.forwardEncoder(imgs)
+        self.saveLatentVectorWithLabel(latent, target, labelmap)
+        pred = self.forwardDecoder(latent)  # [N, L, p*p*3]
+        loss = self.forward_loss(imgs, pred)
+        return loss, pred
+
+    def forwardEncoder(self, img, mask_ratio=0.8):
         # patch embedding
 
         #encoder

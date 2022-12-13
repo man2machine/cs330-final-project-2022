@@ -1,3 +1,4 @@
+# based onhttps://github.com/aanna0701/SPT_LSA_ViT
 import math
 import torch
 from torch.optim.lr_scheduler import _LRScheduler

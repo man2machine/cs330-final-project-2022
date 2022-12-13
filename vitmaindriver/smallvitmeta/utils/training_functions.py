@@ -1,3 +1,4 @@
+# based on https://github.com/aanna0701/SPT_LSA_ViT
 import torch
 
 class EarlyStopping:

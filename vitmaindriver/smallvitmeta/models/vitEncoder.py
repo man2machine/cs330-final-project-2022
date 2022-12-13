@@ -1,3 +1,4 @@
+# based onhttps://github.com/aanna0701/SPT_LSA_ViT
 import torch
 from torch import nn, einsum
 from utils.drop_path import DropPath

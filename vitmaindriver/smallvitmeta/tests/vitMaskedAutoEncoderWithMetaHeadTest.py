@@ -1,3 +1,4 @@
+#@author:  Faraz, Shahir, Pratyush
 import torch
 import torch.nn as nn
 from  smallvitt.models.vitMaskedVideoEncoderWithMetaHead import  VitMaskedEncoderWithMetaHead
