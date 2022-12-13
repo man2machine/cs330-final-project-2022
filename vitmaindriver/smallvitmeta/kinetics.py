@@ -495,11 +495,14 @@ class VideoMAE(torch.utils.data.Dataset):
         images = self._video_TSN_decord_batch_loader(directory, decord_vr, duration, segment_indices, skip_offsets)
         from PIL import Image
         #images[0].show()
+        #for our project we are doing masking inside autoencoder. so we need to retund labels not mask
+        #clips = self.clips[segment_indices]
         process_data, mask = self.transform((images, None))  # T*C,H,W
         process_data = process_data.view((self.new_length, 3) + process_data.size()[-2:]).transpose(0,
                                                                                                     1)  # T*C,H,W -> T,C,H,W -> C,T,H,W
-
-        return (process_data, mask)
+        target = torch.tensor(target, dtype=torch.int16)
+        target = torch.unsqueeze(target, dim=0)
+        return (process_data, target)
 
     def __len__(self):
         return len(self.clips)
@@ -508,7 +511,7 @@ class VideoMAE(torch.utils.data.Dataset):
 
         import json
 
-        # Opening JSON file
+        # char2 JSON file
         f = open(setting)
 
         # returns JSON object as
