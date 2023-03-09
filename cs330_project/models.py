@@ -874,12 +874,9 @@ class ViTClassifier(nn.Module):
 
         latent = self.encoder(x, masked_indices)
         
-        print(latent.shape)
         latent = latent.mean(dim=1)  # patch-wise average pooling
-        print(latent.shape)
         latent = self.head_norm(latent)
         latent = self.head_dropout(latent)
-        print(latent.shape)
 
         pred = self.head(latent)
 
